@@ -1,0 +1,143 @@
+# Kiro Control Panel — Spec v1
+
+## Vision
+
+A system-tray-resident Java Swing app that exposes the Kiro IDE's built-in
+management surfaces — MCP servers, Steering docs, Skills, Hooks, and Usage —
+to CLI-only Kiro users. It edits the *same on-disk files* Kiro itself reads
+(`~/.kiro/...` and `<workspace>/.kiro/...`), so nothing is duplicated or
+proprietary: changes made here take effect in Kiro (IDE or CLI) immediately,
+and vice versa.
+
+Built as a sibling of `aws-idp-saml-ui`, reusing its proven patterns: FlatLaf
+theming, minimize-to-tray, Maven shade single-jar packaging, slf4j/logback
+logging.
+
+## Non-goals (v1)
+
+- Not a chat client — does not talk to models or run agents.
+- Not a replacement for `kiro-cli` — a companion for config/file management
+  it doesn't expose well to CLI users.
+- Personal usage/credit balance: **no viable path exists yet, so this is
+  held rather than shipped.** Ruled out, in order:
+  1. Shelling out to `kiro-cli` for `/usage` output — doesn't work.
+     `kiro-cli chat --no-interactive` explicitly excludes slash commands
+     ("Interactive slash commands are not available" in headless mode);
+     `/usage` only renders inside the live interactive REPL.
+  2. Linking to the AWS-side web dashboard — not useful for most users.
+     It's an **org-admin** surface (`q:ListDashboardMetrics` etc.), gated
+     behind IAM Identity Center admin permissions most individual devs
+     don't have, and shows org-wide aggregates, not a personal balance
+     anyway.
+  3. Calling the undocumented internal API the IDE itself uses
+     (`q.us-east-1.amazonaws.com`, `X-Amz-Target:
+     AmazonCodeWhispererService.GetUsageLimits`, reverse-engineered by
+     third-party proxy projects) — **deliberately rejected**, not just
+     hard. This is Kiro's private backend contract, not a published API;
+     reimplementing its auth flow to call it directly is very likely a
+     ToS violation (it's exactly what those proxy tools exist to route
+     around) and it's an unversioned internal surface with no vendor
+     support if it changes.
+
+  v1's Usage tab is a static note pointing users at `kiro-cli` → `/usage`
+  directly — most people using this tool already have the CLI open
+  anyway. Revisit once kirodotdev/Kiro#7752 (a scriptable usage API) ships.
+
+## Kiro file formats (source of truth, from kiro.dev docs)
+
+| Surface  | Global path                | Workspace path                    | Format |
+|----------|-----------------------------|------------------------------------|--------|
+| MCP      | `~/.kiro/settings/mcp.json` | `<ws>/.kiro/settings/mcp.json`     | JSON — `mcpServers` map of `{command,args,env,disabled,autoApprove,disabledTools}` or `{url,headers,oauth,oauthScopes,...}` for remote servers. Workspace overrides global. Kiro reloads automatically on save. |
+| Steering | `~/.kiro/steering/*.md`     | `<ws>/.kiro/steering/*.md`        | Markdown + YAML front matter: `inclusion: always\|fileMatch\|manual\|auto`, `fileMatchPattern`, `name`/`description` (for `auto`). |
+| Skills   | `~/.kiro/skills/<name>/SKILL.md` | `<ws>/.kiro/skills/<name>/SKILL.md` | Folder per skill; `SKILL.md` (YAML front matter + instructions) is required, plus optional `scripts/`, `references/`, `assets/`. |
+| Hooks    | — (workspace only)          | `<ws>/.kiro/hooks/*.json`         | JSON: `name`, `trigger` (e.g. `PostFileSave`), `matcher`, `action{type,command\|prompt}`, `timeout`, `enabled`. |
+| Usage    | n/a (no local file)         | n/a                                | Held — no viable local/API source; see Non-goals. |
+
+`KIRO_HOME` env var is honored to relocate the global `~/.kiro` root, matching
+Kiro's own behavior.
+
+## Feature scope
+
+1. **MCP Servers panel** — table of servers scoped by Global / Workspace tabs;
+   enable/disable toggle (writes `disabled`); add/edit/remove server via
+   dialog (command/args/env/autoApprove/disabledTools, or url/headers/oauth
+   for remote); raw-JSON fallback view for anything the form doesn't cover;
+   "reveal file" action.
+2. **Steering panel** — list per scope; embedded text editor for body +
+   form for front-matter fields; "new from template"
+   (product.md/tech.md/structure.md scaffolds); delete.
+3. **Skills panel** — list per scope; edit `SKILL.md` (front matter + body);
+   read-only tree view of `scripts/`/`references/`/`assets/`; scaffold new
+   skill folder; delete.
+4. **Hooks panel** — workspace-only list; enable/disable toggle; form editor
+   for trigger/matcher/action/timeout + raw-JSON fallback; create/delete.
+5. **Usage panel** — held (see Non-goals). Static note directing users to
+   `kiro-cli` → `/usage` instead of a broken or ToS-risky feature.
+
+## Cross-cutting behavior
+
+- **Workspace picker**: user adds/pins project directories (a "recent
+  workspaces" list, persisted via `java.util.prefs.Preferences` — no SQLite
+  needed, our local state is tiny). Global-scope tabs are always visible;
+  workspace-scope tabs appear per pinned workspace.
+- **Live file watching**: `java.nio.file.WatchService` on active `.kiro`
+  dirs, so edits made in Kiro IDE itself are reflected without manual
+  refresh.
+- **Tray-first UX**: window hidden by default; tray icon restores on click;
+  tray menu offers quick actions (New Steering Doc, Open Workspace…, Exit).
+  Close button minimizes to tray, same as `aws-idp-saml-ui`.
+- **Theming**: port `ThemeManager` wholesale (FlatLaf + IntelliJ themes).
+- **No AWS SDK / credential dependency in v1 core** — MCP/steering/skills/
+  hooks are pure local file operations, so the app stays auth-free for its
+  primary use cases (unlike `aws-idp-saml-ui`, which needs STS).
+
+## Tech stack
+
+- Java 24 (Corretto, matches the `maven-amz24` build container), Maven,
+  `maven-shade-plugin` → single runnable jar (pattern copied from
+  `aws-idp-saml-ui/pom.xml`).
+- FlatLaf + `flatlaf-intellij-themes` + `flatlaf-extras`.
+- Jackson (`jackson-databind`) for JSON (mcp.json, hooks/*.json) — new dep,
+  since Kiro uses JSON here, not INI like the SAML app.
+- SnakeYAML for front-matter parsing in steering/skill markdown.
+- slf4j + logback (logging).
+- JUnit 5 + Mockito (tests).
+- Explicitly **not** carried over from `aws-idp-saml-ui`: Selenium, AWS SDK,
+  ini4j, sqlite-jdbc — none of those are needed for pure file management.
+
+## Proposed package layout
+
+```
+com.ourgiant.kirocontrolpanel/
+├── TrayApp.java              # main() + tray icon lifecycle, X11 popup-position fix
+├── MainWindow.java           # JFrame, tabbed panels
+├── ThemeManager.java         # ported from aws-idp-saml-ui
+├── AppPreferences.java       # recent workspaces, theme, window bounds
+├── KiroPaths.java            # resolves ~/.kiro vs KIRO_HOME, workspace .kiro
+├── WorkspaceScope.java       # Global-vs-workspace scope record, shared across panels
+├── mcp/        McpServerConfig.java McpConfigFile.java McpConfigService.java
+│               McpServerTableModel.java McpPanel.java McpServerEditDialog.java McpRawJsonDialog.java
+├── steering/   SteeringDoc.java SteeringService.java SteeringPanel.java SteeringEditorDialog.java
+├── skills/     Skill.java SkillService.java SkillsPanel.java SkillEditorDialog.java
+├── hooks/      Hook.java HookService.java HooksPanel.java HookEditDialog.java   # M4, not yet built
+├── usage/      UsagePanel.java   # static "held" note, see Non-goals
+└── util/       FrontMatterParser.java WorkspaceScopeBar.java IconFactory.java
+```
+
+## Milestones
+
+- **M0** — done. Scaffold, tray icon, X11 popup-at-(0,0) fix ported from
+  `aws-idp-saml-ui` (#71/#70).
+- **M1** — done. MCP panel: structured CRUD + raw-JSON fallback, global +
+  workspace.
+- **M2** — done. Steering panel.
+- **M3** — done. Skills panel, including the "SKILL.md must be in a
+  subfolder" rule Kiro enforces.
+- **M4** — done. Hooks panel (workspace-only; a workspace can spread hooks
+  across multiple `.kiro/hooks/*.json` files, each shaped
+  `{"version":"v1","hooks":[...]}` — confirmed against kiro.dev docs rather
+  than assumed).
+- **M5** — held, not a real feature. See Non-goals — static note only.
+- **M6** — not started. Polish: live file watching, first-run onboarding,
+  native packaging (jpackage/icns/ico) mirroring
+  `aws-idp-saml-ui/src/packaging/`.
