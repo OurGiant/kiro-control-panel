@@ -110,22 +110,34 @@ Kiro's own behavior.
 ```
 com.ourgiant.kirocontrolpanel/
 ├── TrayApp.java              # main() + tray icon lifecycle, X11 popup-position fix
-├── MainWindow.java           # JFrame, tabbed panels, File/Config menus
+├── MainWindow.java           # JFrame, tabbed panels, File/Config/Help menus
 ├── FirstRunDialog.java       # one-time welcome dialog
+├── AboutDialog.java          # version display (Help > About)
 ├── ThemeManager.java         # ported from aws-idp-saml-ui
 ├── AppPreferences.java       # recent workspaces, theme, window bounds, first-run flag
 ├── KiroPaths.java            # resolves ~/.kiro vs KIRO_HOME, workspace .kiro
 ├── WorkspaceScope.java       # Global-vs-workspace scope record, shared across panels
 ├── mcp/        McpServerConfig.java McpConfigFile.java McpConfigService.java
-│               McpServerTableModel.java McpPanel.java McpServerEditDialog.java
-├── steering/   SteeringDoc.java SteeringService.java SteeringPanel.java SteeringEditorDialog.java
+│               McpServerTableModel.java McpServerFormPanel.java McpServerEditDialog.java
+├── steering/   SteeringDoc.java SteeringService.java SteeringTemplates.java
+│               SteeringPanel.java SteeringEditorDialog.java
 ├── skills/     Skill.java SkillService.java SkillsPanel.java SkillEditorDialog.java
 ├── hooks/      Hook.java HookAction.java HookFile.java HookEntry.java HookService.java
-│               HookTableModel.java HooksPanel.java HookEditDialog.java
+│               HookTableModel.java HookFormPanel.java HooksPanel.java HookEditDialog.java
 ├── usage/      UsagePanel.java   # static "held" note, see Non-goals
-└── util/       FrontMatterParser.java JsonMapperFactory.java WorkspaceScopeBar.java
-                RawJsonEditorDialog.java DirectoryWatcher.java IconFactory.java
+└── util/       FrontMatterParser.java JsonMapperFactory.java AppVersion.java
+                WorkspaceScope[Bar|Registry].java RawJsonEditorDialog.java
+                DirectoryWatcher.java DesktopUtils.java SwingLayoutUtils.java IconFactory.java
 ```
+
+Note the `*FormPanel` split: `McpServerEditDialog`/`HookEditDialog` are thin
+`JDialog` chrome around `McpServerFormPanel`/`HookFormPanel` (plain
+`JPanel`s owning the actual Form/Raw-JSON-tab-sync logic). `JDialog`
+construction throws `HeadlessException` in a headless environment (this
+project's Maven container has no display); a plain `JPanel` doesn't. The
+split exists specifically so the trickiest logic in the app — the tab
+reentrancy guard, form↔JSON sync — has real automated test coverage instead
+of being verified by hand each time.
 
 ## Milestones
 
@@ -164,3 +176,48 @@ com.ourgiant.kirocontrolpanel/
   designed assets at `src/packaging/app-icon.ico` / `app-icon.icns` and
   uncomment the `--icon` flags in `build.yml` when they exist (see the TODO
   comments there).
+
+## Post-M6 polish ("Claude's Choice")
+
+A self-directed evaluation pass over the whole codebase, prioritized and
+executed as Tier 1 (real gaps) and Tier 2 (worthwhile cleanup):
+
+- **Cross-panel workspace sync** (`WorkspaceRegistry`) — each panel's
+  `WorkspaceScopeBar` used to only read `AppPreferences` at its own
+  construction/reload time, so pinning a workspace in one panel silently
+  didn't show up in another until something else triggered that panel's
+  reload. Now every `WorkspaceScopeBar` instance registers with a shared
+  registry and reloads whenever *any* instance changes the pinned list —
+  while preserving each panel's own current selection unless the workspace
+  it had selected was the one that got removed.
+- **"Reveal File" action** (`DesktopUtils`) — added to all four panels;
+  was in the original spec for MCP but never built.
+- **Shared panel utilities** (`SwingLayoutUtils`) — the vertical
+  side-button-panel construction and "Delete X? This cannot be undone."
+  confirm dialog were near-identical copy-paste across all four panels;
+  extracted once both were about to be touched anyway for the above.
+- **Steering "new from template"** (`SteeringTemplates`) — creating a file
+  named exactly `product.md`/`tech.md`/`structure.md` now scaffolds
+  Kiro's standard starter content instead of an empty file.
+- **`McpServerFormPanel` / `HookFormPanel` extraction** — the Form/Raw-JSON
+  tab-sync logic (the trickiest code in the app: a reentrancy guard plus
+  bidirectional JSON↔form sync) lived inside `McpServerEditDialog`/
+  `HookEditDialog`, both `JDialog`s. `JDialog` construction throws
+  `HeadlessException` in this project's headless build container, so that
+  logic had zero automated coverage — it was verified once by hand and
+  then trusted. Split into plain-`JPanel` form classes (`JPanel`
+  constructs fine headlessly, confirmed empirically before committing to
+  this approach) specifically to make it testable; 16 new tests now cover
+  both directions of the sync, the reentrancy guard across repeated
+  switches, and round-trip fidelity. The invalid-JSON *dialog* itself
+  still can't be tested headlessly (`JOptionPane` has the same
+  `HeadlessException` issue) — the parsing logic that feeds it was
+  refactored to a dialog-free method (`tryParseRawJsonIntoForm`) so at
+  least the "does this detect bad JSON" part has coverage; the "does it
+  correctly show an error and revert the tab" part remains manual/host-only
+  verification, same as everything else in `.claude/skills/verify/SKILL.md`.
+- **About dialog** (`AboutDialog`, `AppVersion`, Help menu) — nothing in
+  the running app showed a version before this; `version.properties` +
+  `pom.xml` resource filtering ported from `aws-idp-saml-ui`.
+
+56 tests total (up from 33 at the end of M6).

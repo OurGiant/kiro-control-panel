@@ -3,7 +3,9 @@ package com.ourgiant.kirocontrolpanel.steering;
 import com.ourgiant.kirocontrolpanel.AppPreferences;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.WorkspaceScope;
+import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
+import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +34,7 @@ public class SteeringPanel extends JPanel {
 
     private JButton editButton;
     private JButton deleteButton;
+    private JButton revealButton;
 
     public SteeringPanel(AppPreferences preferences, DirectoryWatcher watcher) {
         super(new BorderLayout(8, 8));
@@ -66,9 +69,6 @@ public class SteeringPanel extends JPanel {
     }
 
     private JPanel createSideButtons() {
-        JPanel sideButtonPanel = new JPanel();
-        sideButtonPanel.setLayout(new BoxLayout(sideButtonPanel, BoxLayout.Y_AXIS));
-
         JButton newButton = new JButton("New...");
         newButton.setMnemonic(KeyEvent.VK_N);
         newButton.addActionListener(e -> onNew());
@@ -81,14 +81,10 @@ public class SteeringPanel extends JPanel {
         deleteButton.setMnemonic(KeyEvent.VK_D);
         deleteButton.addActionListener(e -> onDelete());
 
-        for (JButton button : new JButton[] {newButton, editButton, deleteButton}) {
-            button.setAlignmentX(Component.LEFT_ALIGNMENT);
-            button.setMaximumSize(new Dimension(Integer.MAX_VALUE, button.getPreferredSize().height));
-            sideButtonPanel.add(button);
-            sideButtonPanel.add(Box.createVerticalStrut(6));
-        }
-        sideButtonPanel.add(Box.createVerticalGlue());
-        return sideButtonPanel;
+        revealButton = new JButton("Reveal File...");
+        revealButton.addActionListener(e -> onReveal());
+
+        return SwingLayoutUtils.createVerticalButtonPanel(newButton, editButton, deleteButton, revealButton);
     }
 
     private void reloadDocList() {
@@ -112,6 +108,7 @@ public class SteeringPanel extends JPanel {
         boolean hasSelection = docList.getSelectedValue() != null;
         editButton.setEnabled(hasSelection);
         deleteButton.setEnabled(hasSelection);
+        revealButton.setEnabled(hasSelection);
     }
 
     private void onNew() {
@@ -140,6 +137,7 @@ public class SteeringPanel extends JPanel {
         }
 
         SteeringDoc doc = new SteeringDoc(filePath, scope.workspaceRoot());
+        doc.setBody(SteeringTemplates.bodyFor(fileName));
         SteeringEditorDialog dialog =
             new SteeringEditorDialog((Frame) SwingUtilities.getWindowAncestor(this), steeringService, doc);
         dialog.setVisible(true);
@@ -173,12 +171,8 @@ public class SteeringPanel extends JPanel {
         if (selected == null) {
             return;
         }
-        int confirm = JOptionPane.showConfirmDialog(this,
-            "Delete \"" + selected.getFileName() + "\"? This cannot be undone.",
-            "Delete Steering Doc",
-            JOptionPane.YES_NO_OPTION,
-            JOptionPane.WARNING_MESSAGE);
-        if (confirm != JOptionPane.YES_OPTION) {
+        if (!SwingLayoutUtils.confirmDelete(this, "Delete Steering Doc",
+                "Delete \"" + selected.getFileName() + "\"? This cannot be undone.")) {
             return;
         }
         try {
@@ -188,6 +182,13 @@ public class SteeringPanel extends JPanel {
             logger.error("Failed to delete steering doc: {}", selected.getFilePath(), ex);
             JOptionPane.showMessageDialog(this,
                 "Failed to delete: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onReveal() {
+        SteeringDoc selected = docList.getSelectedValue();
+        if (selected != null) {
+            DesktopUtils.revealInFileManager(this, selected.getFilePath());
         }
     }
 }

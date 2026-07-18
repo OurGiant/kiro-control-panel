@@ -53,6 +53,7 @@ public class MainWindow extends JFrame {
         JMenuBar menuBar = new JMenuBar();
         menuBar.add(createFileMenu());
         menuBar.add(createConfigMenu());
+        menuBar.add(createHelpMenu());
         return menuBar;
     }
 
@@ -92,6 +93,17 @@ public class MainWindow extends JFrame {
         configMenu.add(themeMenu);
 
         return configMenu;
+    }
+
+    private JMenu createHelpMenu() {
+        JMenu helpMenu = new JMenu("Help");
+        helpMenu.setMnemonic(KeyEvent.VK_H);
+
+        JMenuItem aboutItem = new JMenuItem("About");
+        aboutItem.addActionListener(e -> new AboutDialog(this).setVisible(true));
+        helpMenu.add(aboutItem);
+
+        return helpMenu;
     }
 
     /** TrayApp wires this to its own exit logic (tray icon cleanup, System.exit). */

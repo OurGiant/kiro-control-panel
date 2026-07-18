@@ -3,8 +3,10 @@ package com.ourgiant.kirocontrolpanel.hooks;
 import com.ourgiant.kirocontrolpanel.AppPreferences;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.WorkspaceScope;
+import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.RawJsonEditorDialog;
+import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +41,7 @@ public class HooksPanel extends JPanel {
     private JButton removeButton;
     private JButton toggleEnabledButton;
     private JButton rawJsonButton;
+    private JButton revealButton;
 
     public HooksPanel(AppPreferences preferences, DirectoryWatcher watcher) {
         super(new BorderLayout(8, 8));
@@ -63,9 +66,6 @@ public class HooksPanel extends JPanel {
     }
 
     private JPanel createSideButtons() {
-        JPanel sideButtonPanel = new JPanel();
-        sideButtonPanel.setLayout(new BoxLayout(sideButtonPanel, BoxLayout.Y_AXIS));
-
         JButton addButton = new JButton("Add...");
         addButton.setMnemonic(KeyEvent.VK_A);
         addButton.addActionListener(e -> onAdd());
@@ -85,14 +85,11 @@ public class HooksPanel extends JPanel {
         rawJsonButton = new JButton("Edit Raw JSON...");
         rawJsonButton.addActionListener(e -> onEditRawJson());
 
-        for (JButton button : new JButton[] {addButton, editButton, toggleEnabledButton, removeButton, rawJsonButton}) {
-            button.setAlignmentX(Component.LEFT_ALIGNMENT);
-            button.setMaximumSize(new Dimension(Integer.MAX_VALUE, button.getPreferredSize().height));
-            sideButtonPanel.add(button);
-            sideButtonPanel.add(Box.createVerticalStrut(6));
-        }
-        sideButtonPanel.add(Box.createVerticalGlue());
-        return sideButtonPanel;
+        revealButton = new JButton("Reveal File...");
+        revealButton.addActionListener(e -> onReveal());
+
+        return SwingLayoutUtils.createVerticalButtonPanel(
+            addButton, editButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
     }
 
     private void reloadTable() {
@@ -112,6 +109,7 @@ public class HooksPanel extends JPanel {
         removeButton.setEnabled(hasSelection);
         toggleEnabledButton.setEnabled(hasSelection);
         rawJsonButton.setEnabled(hasSelection);
+        revealButton.setEnabled(hasSelection);
     }
 
     private void onAdd() {
@@ -188,12 +186,8 @@ public class HooksPanel extends JPanel {
             return;
         }
         HookEntry entry = tableModel.entryAt(row);
-        int confirm = JOptionPane.showConfirmDialog(this,
-            "Remove hook \"" + entry.getHook().getName() + "\"? This cannot be undone.",
-            "Remove Hook",
-            JOptionPane.YES_NO_OPTION,
-            JOptionPane.WARNING_MESSAGE);
-        if (confirm != JOptionPane.YES_OPTION) {
+        if (!SwingLayoutUtils.confirmDelete(this, "Remove Hook",
+                "Remove hook \"" + entry.getHook().getName() + "\"? This cannot be undone.")) {
             return;
         }
         try {
@@ -202,6 +196,13 @@ public class HooksPanel extends JPanel {
         } catch (IOException ex) {
             logger.error("Failed to remove hook", ex);
             JOptionPane.showMessageDialog(this, "Failed to remove: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onReveal() {
+        int row = table.getSelectedRow();
+        if (row >= 0) {
+            DesktopUtils.revealInFileManager(this, tableModel.entryAt(row).getFilePath());
         }
     }
 

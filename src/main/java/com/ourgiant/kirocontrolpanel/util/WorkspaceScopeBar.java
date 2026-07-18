@@ -52,6 +52,7 @@ public class WorkspaceScopeBar extends JPanel {
 
         scopeCombo.addActionListener(e -> fireScopeChanged());
         reload();
+        WorkspaceRegistry.addListener(this::reload);
     }
 
     public void addScopeChangeListener(Consumer<WorkspaceScope> listener) {
@@ -60,6 +61,20 @@ public class WorkspaceScopeBar extends JPanel {
 
     public WorkspaceScope getSelectedScope() {
         return (WorkspaceScope) scopeCombo.getSelectedItem();
+    }
+
+    /** Package-private, for tests: the scope bar's current dropdown contents. */
+    List<WorkspaceScope> getAvailableScopes() {
+        List<WorkspaceScope> scopes = new ArrayList<>();
+        for (int i = 0; i < scopeModel.getSize(); i++) {
+            scopes.add(scopeModel.getElementAt(i));
+        }
+        return scopes;
+    }
+
+    /** Package-private, for tests: select a scope already present in the dropdown. */
+    void selectScope(WorkspaceScope scope) {
+        scopeCombo.setSelectedItem(scope);
     }
 
     public void reload() {
@@ -101,7 +116,10 @@ public class WorkspaceScopeBar extends JPanel {
         }
         String path = chooser.getSelectedFile().getAbsolutePath();
         preferences.addWorkspace(path);
-        reload();
+        // Reloads every WorkspaceScopeBar instance app-wide (including this one) via the
+        // registry, rather than calling reload() directly — otherwise sibling panels never
+        // learn a workspace was pinned until something else happens to trigger their reload.
+        WorkspaceRegistry.notifyChanged();
         for (int i = 0; i < scopeModel.getSize(); i++) {
             if (path.equals(scopeModel.getElementAt(i).label())) {
                 scopeCombo.setSelectedIndex(i);
@@ -123,6 +141,6 @@ public class WorkspaceScopeBar extends JPanel {
             return;
         }
         preferences.removeWorkspace(scope.label());
-        reload();
+        WorkspaceRegistry.notifyChanged();
     }
 }
