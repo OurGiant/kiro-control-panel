@@ -1,10 +1,10 @@
 # Kiro Control Panel
 
 A Java Swing system-tray app that gives CLI-only [Kiro](https://kiro.dev) users
-the same MCP server, steering doc, skill, and hook management the IDE builds
-in — without needing the IDE. It reads and writes the exact files Kiro itself
-uses (`~/.kiro/...` and `<workspace>/.kiro/...`), so changes made here take
-effect in Kiro immediately, and vice versa.
+the same MCP server, steering doc, skill, hook, and agent management the IDE
+builds in — without needing the IDE. It reads and writes the exact files Kiro
+itself uses (`~/.kiro/...` and `<workspace>/.kiro/...`), so changes made here
+take effect in Kiro immediately, and vice versa.
 
 See [SPEC.md](SPEC.md) for the full design writeup, including what was tried
 and ruled out for usage/credit tracking.
@@ -12,13 +12,17 @@ and ruled out for usage/credit tracking.
 ## Features
 
 - **MCP Servers**: add/edit/enable/disable/remove entries in `mcp.json`
-  (global and per-workspace), with a Form or Raw JSON editor for each server
+  (global and per-workspace), with a Form or Raw JSON editor for each server;
+  a "Browse Catalog..." picker for one-click adding known servers from
+  [kiro.dev's known MCP server list](https://kiro.dev/docs/mcp/servers/)
 - **Steering Docs**: create/edit/delete `.kiro/steering/*.md`, including
   front-matter inclusion modes (always/fileMatch/manual/auto)
 - **Skills**: create/edit/delete `.kiro/skills/<name>/SKILL.md`, with a
   read-only browser for bundled `scripts/`/`references/`/`assets/`
 - **Hooks**: add/edit/enable/disable/remove workspace hooks across
   `.kiro/hooks/*.json`, with the same Form/Raw JSON editing
+- **Agents**: create/edit/delete `.kiro/agents/*.json` custom agent configs,
+  with a Form editor for the common fields and Raw JSON for the rest
 - **Tray-resident**: minimizes to the system tray instead of exiting; FlatLaf
   theming (light/dark/IntelliJ themes) under Config > Theme
 
