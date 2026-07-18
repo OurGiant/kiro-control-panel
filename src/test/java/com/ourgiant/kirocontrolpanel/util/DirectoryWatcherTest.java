@@ -19,7 +19,7 @@ class DirectoryWatcherTest {
     Path tempDir;
 
     @Test
-    @Timeout(5)
+    @Timeout(30)
     void notifiesListenerWhenFileCreatedInWatchedDirectory() throws IOException, InterruptedException {
         DirectoryWatcher watcher = new DirectoryWatcher();
         CountDownLatch latch = new CountDownLatch(1);
@@ -28,7 +28,11 @@ class DirectoryWatcherTest {
         watcher.watch(tempDir);
         Files.writeString(tempDir.resolve("new-file.txt"), "hello");
 
-        assertTrue(latch.await(3, TimeUnit.SECONDS), "listener should fire after a file is created");
+        // Generous on purpose: macOS's WatchService implementation polls rather than
+        // using native OS events, with much coarser latency than Linux's inotify-backed
+        // one (observed failing at 3s on GitHub's macOS runners) -- this isn't testing
+        // how fast the notification arrives, just that it eventually does.
+        assertTrue(latch.await(20, TimeUnit.SECONDS), "listener should fire after a file is created");
     }
 
     @Test
@@ -47,7 +51,7 @@ class DirectoryWatcherTest {
     }
 
     @Test
-    @Timeout(5)
+    @Timeout(30)
     void watchingSameDirectoryTwiceStillOnlyRegistersOnce() throws IOException, InterruptedException {
         DirectoryWatcher watcher = new DirectoryWatcher();
         CountDownLatch latch = new CountDownLatch(1);
@@ -57,7 +61,7 @@ class DirectoryWatcherTest {
         watcher.watch(tempDir);
         Files.writeString(tempDir.resolve("new-file.txt"), "hello");
 
-        assertTrue(latch.await(3, TimeUnit.SECONDS));
+        assertTrue(latch.await(20, TimeUnit.SECONDS));
     }
 
     @Test
