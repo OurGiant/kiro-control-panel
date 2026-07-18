@@ -13,6 +13,40 @@ Built as a sibling of `aws-idp-saml-ui`, reusing its proven patterns: FlatLaf
 theming, minimize-to-tray, Maven shade single-jar packaging, slf4j/logback
 logging.
 
+## Development workflow
+
+As of `v1.0.0`, this repo is issue/PR-driven rather than direct-to-`main`:
+
+- **Every change starts as a GitHub issue.** Bugs, features, and chores all
+  get filed first — this is what "release-driven" means in practice: a
+  milestone (see below) only contains work that's actually been scoped as
+  an issue, not whatever happened to get built in a given session.
+- **One short-lived branch per issue**, named `feature/<issue-#>-slug` or
+  `fix/<issue-#>-slug` — matches the convention already established in
+  `aws-idp-saml-ui`'s history (`feature/83-macos-icns-icon`,
+  `feature/84-fix-orphaned-browser-on-cancel`).
+- **Merge to `main` via PR only**, referencing `Closes #<issue-#>` so
+  merging auto-closes the issue. `main` has GitHub branch protection
+  enabled: PRs required, force-pushes and branch deletion blocked,
+  enforced even for admins. No approval count is required (solo
+  maintainer), and required status checks aren't configured yet — see the
+  note below.
+- **Milestones represent releases** (e.g. `v1.1.0`). Assign issues to a
+  milestone to define what's actually in scope for the next tag. When a
+  milestone's issues are done, tag `main` at that commit
+  (`vX.Y.Z`) — same as `v1.0.0`, no change to `build.yml`'s existing
+  release-on-tag behavior.
+- **No `develop`/`release` branches.** GitFlow's multi-branch ceremony
+  earns its keep with multiple concurrent release trains; for a
+  single-maintainer repo it's just friction. Plain GitHub Flow (branch →
+  PR → merge → tag when ready) covers everything this project needs.
+
+**Deliberately deferred:** required status checks on the branch protection
+rule (i.e. blocking merge until `build.yml`'s CI jobs pass). The exact
+check-run names weren't known in advance, and configuring the wrong ones
+would silently and permanently block every future merge — safer to learn
+the real names from an actual PR's CI run first, then add them.
+
 ## Non-goals (v1)
 
 - Not a chat client — does not talk to models or run agents.
