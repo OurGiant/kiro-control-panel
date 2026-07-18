@@ -572,6 +572,31 @@ anywhere near "done":**
    the rest. Fixed by wrapping it in a `JScrollPane` in `CENTER`, matching
    the pattern already used everywhere else in this app for exactly this
    kind of content.
+3. CI then surfaced a third issue on `build-macos (macos-15-intel, x64)`
+   only (not Linux, Windows, or macOS arm64): `JEditorPane.getPreferredSize()`
+   threw a `NullPointerException` deep inside Swing's own HTML layout
+   engine (`FlowView$FlowStrategy.layoutRow` → `CompositeView.replace`,
+   "child is null") when `UsagePanel` was tested at 300px. This is a real,
+   pre-existing JDK/Swing bug (font-metrics-dependent HTML flow-breaking
+   at pathologically narrow effective widths — the kind of bug tracked as
+   JDK-8202537), not app code, and didn't reproduce locally on Linux,
+   confirming the platform-dependence rather than chasing a phantom.
+   Genuinely concerning, though: this is the same effective width a real
+   user could resize their actual window to. Fixed at the root rather than
+   dodging the specific test width: `MainWindow` now enforces a real
+   `MINIMUM_SIZE` (640×480, both via `setMinimumSize` for interactive
+   resizing and by clamping restored bounds, since `setMinimumSize` alone
+   doesn't constrain a stale narrow size persisted from before this fix)
+   so the app can no longer reach that pathological width at all in
+   production. `PanelLayoutClippingTest` tests `UsagePanel` at that new
+   floor (640px) instead of the shared `NARROW_WIDTH` (300px, which the
+   other 5 `WorkspaceScopeBar`-embedding panels still use, preserving full
+   wrapping-forcing coverage for the #18 bug class specifically) — per-row
+   width overrides the parameterized test's `(name, factory)` → `(name,
+   factory, narrowWidth)` shape, rather than moving to 640 everywhere,
+   which would have silently weakened #18 coverage: in a clean CI
+   environment with no pinned workspaces, `WorkspaceScopeBar`'s content
+   may not actually wrap at 640px, only at something as narrow as 300px.
 
 **Verification that the suite actually would have caught #18** (not just
 plausibly might have): temporarily reverted `WorkspaceScopeBar` back to

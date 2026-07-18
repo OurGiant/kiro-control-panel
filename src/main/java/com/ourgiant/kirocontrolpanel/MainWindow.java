@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import java.awt.Dimension;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
@@ -22,6 +23,7 @@ import java.awt.event.KeyEvent;
  */
 public class MainWindow extends JFrame {
     private static final Logger logger = LoggerFactory.getLogger(MainWindow.class);
+    private static final Dimension MINIMUM_SIZE = new Dimension(640, 480);
 
     private final AppPreferences preferences;
     private Runnable quitHandler = () -> System.exit(0);
@@ -42,8 +44,18 @@ public class MainWindow extends JFrame {
         tabs.addTab("Usage", new UsagePanel());
         setContentPane(tabs);
 
+        // Below this, content isn't just visually cramped -- some platforms'
+        // JDK/Swing HTML text layout (JEditorPane, used by the Usage tab)
+        // can throw a NullPointerException deep in FlowView$FlowStrategy at
+        // pathologically narrow effective widths (a known font-metrics-
+        // dependent JDK bug, reproduced on macOS x64/Intel CI but not Linux
+        // -- see PanelLayoutClippingTest). setMinimumSize alone only
+        // constrains interactive resizing, not a stale narrow size restored
+        // from a previous session, so the restored bounds are clamped too.
+        setMinimumSize(MINIMUM_SIZE);
+
         int[] bounds = preferences.getWindowBounds(900, 600);
-        setSize(bounds[2], bounds[3]);
+        setSize(Math.max(bounds[2], MINIMUM_SIZE.width), Math.max(bounds[3], MINIMUM_SIZE.height));
         if (bounds[0] != Integer.MIN_VALUE) {
             setLocation(bounds[0], bounds[1]);
         } else {
