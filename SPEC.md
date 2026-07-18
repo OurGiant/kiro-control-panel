@@ -282,4 +282,47 @@ polish above, plus one item deliberately skipped:
   real version comparisons once `build.yml`'s release job runs on a
   `v*` tag.
 
+## Linux desktop integration (issue #1)
+
+**Known, accepted limitation: COSMIC shows a generic icon and has no
+system tray, regardless of anything on our end.** Confirmed by testing
+the same build on the same physical machine under KDE, where both the
+system tray and the correct custom icon work correctly — isolating the
+problem to COSMIC's compositor, not this app:
+
+- `SystemTray.isSupported()` returns `false` on COSMIC — no XEmbed
+  systray protocol implementation. Nothing to work around from the app
+  side; this is a missing compositor feature.
+- COSMIC's dock/launcher unreliably resolves app icons for XWayland
+  clients, matching known open upstream bugs:
+  [pop-os/cosmic-epoch#2662](https://github.com/pop-os/cosmic-epoch/issues/2662)
+  (generic "gear" icon until the icon cache is manually rebuilt),
+  [pop-os/cosmic-epoch#2847](https://github.com/pop-os/cosmic-epoch/issues/2847)
+  (missing icons more broadly).
+
+**What we did fix**: the `.deb` package shipped no `.desktop` file at
+all (no `--linux-shortcut` flag), so there was never any desktop
+integration to speak of on *any* Linux desktop, COSMIC or otherwise —
+no app-menu entry, no taskbar/dock icon association via `StartupWMClass`.
+Added a custom `.desktop` template
+(`src/packaging/linux/kiro-control-panel.desktop`) via jpackage's
+`--resource-dir` override, since jpackage's own auto-generated template
+(`jdk.jpackage.internal.resources/template.desktop`, extracted directly
+from the JDK to confirm rather than guessed) has no `StartupWMClass`
+field at all — a well-documented jpackage gap hit by several other Java
+desktop projects (JetBrains, JabRef, JOSM). Our override preserves every
+token the original template substitutes
+(`APPLICATION_NAME`/`APPLICATION_DESCRIPTION`/`APPLICATION_LAUNCHER`/
+`APPLICATION_ICON`/`DEPLOY_BUNDLE_CATEGORY`/`DESKTOP_MIMES`) and adds
+`StartupWMClass=com-ourgiant-kirocontrolpanel-TrayApp` (the app's real
+runtime WM_CLASS, confirmed via `xwininfo` earlier in development).
+
+This is correct, standard Linux desktop integration regardless of the
+COSMIC angle — GNOME/KDE/XFCE etc. all benefit from a real `.desktop`
+entry (app-menu visibility, proper taskbar grouping) even though they
+didn't strictly need it to show the icon correctly. Whether it also
+happens to paper over COSMIC's specific bug is unconfirmed and not
+guaranteed, given the upstream issues are still open — the system tray
+gap is unaffected either way.
+
 63 tests total (up from 56).
