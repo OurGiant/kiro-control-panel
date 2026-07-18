@@ -10,8 +10,11 @@ the MCP tab's "Browse Catalog..." feature, from
 [kiro.dev's known MCP server list](https://kiro.dev/docs/mcp/servers/).
 
 Re-run it whenever that page's list changes (new servers added, existing
-configs updated) — there's no live fetch at app runtime, the catalog is a
-static resource shipped with the app.
+configs updated). The app bundles this file's output at build time, but
+also has a "Refresh" button (`McpCatalogService.fetchFromUrl`) that pulls
+the current version straight from this repo's `main` branch at runtime —
+so merging a regenerated catalog here makes it available to already-
+installed copies of the app immediately, not just in the next release.
 
 ```
 python3 tools/generate-mcp-catalog.py > src/main/resources/mcp-catalog.json
