@@ -2,6 +2,7 @@ package com.ourgiant.kirocontrolpanel.mcp;
 
 import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.util.LinkedHashMap;
@@ -35,6 +36,7 @@ public class McpServerConfig {
 
     private final Map<String, Object> extra = new LinkedHashMap<>();
 
+    @JsonIgnore
     public boolean isRemote() {
         return url != null && !url.isBlank();
     }

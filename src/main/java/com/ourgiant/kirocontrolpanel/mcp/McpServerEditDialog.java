@@ -33,6 +33,26 @@ public class McpServerEditDialog extends JDialog {
         setLocationRelativeTo(parent);
     }
 
+    /**
+     * Add mode, pre-filled from an externally-built config (e.g. a catalog
+     * entry) rather than left at defaults. Still an add, not an edit --
+     * {@code originalName} stays null so the duplicate-name check in
+     * {@link #onSave()} runs against {@code suggestedName} like any other
+     * new server, and the user can rename before saving.
+     */
+    public McpServerEditDialog(Frame parent, McpConfigFile config, String suggestedName, McpServerConfig prefill) {
+        super(parent, "Add MCP Server", true);
+        this.config = config;
+        this.originalName = null;
+
+        initializeUI();
+        formPanel.setServerName(suggestedName);
+        formPanel.populateFrom(prefill);
+        pack();
+        setMinimumSize(new Dimension(560, getHeight()));
+        setLocationRelativeTo(parent);
+    }
+
     public boolean isSaved() {
         return saved;
     }

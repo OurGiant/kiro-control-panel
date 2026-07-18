@@ -112,6 +112,23 @@ class McpConfigServiceTest {
     }
 
     @Test
+    void serializedOutputDoesNotLeakTheDerivedIsRemoteProperty() throws IOException {
+        // isRemote() is a derived convenience method, not real config state --
+        // without @JsonIgnore, Jackson's bean-property introspection treats
+        // any isXxx() getter as a serializable "remote" field, polluting
+        // mcp.json with something Kiro's own schema doesn't define.
+        McpConfigFile config = new McpConfigFile();
+        McpServerConfig server = new McpServerConfig();
+        server.setUrl("https://mcp.example.com/endpoint");
+        config.getMcpServers().put("url-based-tool", server);
+
+        service.save(configPath(), config);
+        String written = Files.readString(configPath());
+
+        assertFalse(written.contains("\"remote\""), "serialized mcp.json should not contain a \"remote\" field: " + written);
+    }
+
+    @Test
     void loadOfMissingFileReturnsEmptyConfig() {
         McpConfigFile config = service.load(tempDir.resolve("does-not-exist.json"));
 
