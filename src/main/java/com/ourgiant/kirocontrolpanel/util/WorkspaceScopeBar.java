@@ -35,7 +35,7 @@ public class WorkspaceScopeBar extends JPanel {
      *                      offers pinned workspaces, no Global entry.
      */
     public WorkspaceScopeBar(AppPreferences preferences, boolean includeGlobal) {
-        super(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        super(new WrapLayout(FlowLayout.LEFT, 6, 0));
         this.preferences = preferences;
         this.includeGlobal = includeGlobal;
 

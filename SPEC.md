@@ -491,3 +491,44 @@ near-identical class of bug (`McpServerConfig.isRemote()` missing
 feature.
 
 98 tests total.
+
+## WorkspaceScopeBar narrow-window clipping (issue #18)
+
+Shipped in 1.1.0, caught by the user running a real local build afterward
+(`WorkspaceScopeBar.java` itself was unchanged between v1.0.0 and v1.1.0 —
+a latent bug, not a regression from that release's changes). At a narrow
+window width, the "Scope: [combo] [Add Workspace...] [Remove Workspace]"
+bar wraps to multiple rows via its `FlowLayout`, but everything past the
+first row was clipped/invisible.
+
+**Root cause, confirmed with a geometry harness before writing any fix**
+(construct `WorkspaceScopeBar` at 300px width, read real `getPreferredSize()`/
+`getSize()`/child `getBounds()` — the same technique documented in
+`.claude/skills/verify/SKILL.md`, applied to layout geometry instead of
+HTML sizing this time): `java.awt.FlowLayout.preferredLayoutSize()` always
+reports a *single-row* size regardless of the container's actual width —
+it has no concept of wrapping in its own preferred-size math, only in the
+separate `layoutContainer()` pass. So `BorderLayout.NORTH` (which sizes its
+child to `getPreferredSize().height`) under-allocates height the moment the
+bar actually wraps, silently clipping every row past the first. Harness
+output before the fix: `preferredSize=[width=1252,height=27]` (one row)
+vs. actual wrapped content needing `height=97` (four rows) — a real,
+measurable 70px shortfall, not a cosmetic one-off.
+
+**Fix**: `util/WrapLayout.java`, a small `FlowLayout` subclass that
+recomputes `preferredLayoutSize()`/`minimumLayoutSize()` by walking the
+container's actual current width and simulating the same row-wrapping
+`FlowLayout` does at layout time — a well-known, standard pattern for this
+exact JDK limitation. `WorkspaceScopeBar` now uses it in place of plain
+`FlowLayout`; same harness re-run after the fix confirms
+`preferredSize().height` now matches the actual wrapped content height
+(97px) and no child extends past the bar's allocated bounds. Covered by a
+new `WrapLayoutTest` using fixed-size placeholder components (not real
+buttons/labels) so the expected pixel math doesn't depend on font metrics.
+
+This is the second bug in a row (after the MCP catalog's stale-config-
+reference and `@JsonIgnore` gap) caught only by driving the real UI, not by
+`mvn test` alone — worth treating as a pattern, not a coincidence, when
+deciding how much manual/E2E verification a change needs before it ships.
+
+101 tests total.
