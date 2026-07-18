@@ -34,7 +34,11 @@ public class AboutDialog extends JDialog {
         note.setBorder(null);
         JScrollPane scrollPane = new JScrollPane(note);
         scrollPane.setBorder(null);
-        scrollPane.setPreferredSize(new Dimension(360, 140));
+        // Sized on the generous side deliberately -- JEditorPane's HTML preferred-size
+        // calculation is unreliable for wrapping (see FirstRunDialog's sizing fix), so a
+        // snug viewport tends to read as "too small"/borderline-scrolling rather than
+        // actually being cut off.
+        scrollPane.setPreferredSize(new Dimension(420, 200));
         add(scrollPane, BorderLayout.CENTER);
 
         JLabel updateLabel = new JLabel("Checking for updates...");
@@ -53,6 +57,7 @@ public class AboutDialog extends JDialog {
         getRootPane().setDefaultButton(closeButton);
 
         pack();
+        setMinimumSize(getSize());
         setLocationRelativeTo(parent);
     }
 
