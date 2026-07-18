@@ -20,6 +20,12 @@ import java.util.function.Consumer;
  */
 public class WorkspaceScopeBar extends JPanel {
 
+    // A pinned workspace's label is its full absolute path, unbounded in length --
+    // without a display cap, one long path balloons the combo's (and so the whole
+    // bar's) preferred width past the window edge, even after resizing, since
+    // JComboBox sizes itself to fit the widest rendered item.
+    private static final int MAX_LABEL_DISPLAY_LENGTH = 40;
+
     private final AppPreferences preferences;
     private final boolean includeGlobal;
     private final DefaultComboBoxModel<WorkspaceScope> scopeModel = new DefaultComboBoxModel<>();
@@ -40,6 +46,19 @@ public class WorkspaceScopeBar extends JPanel {
         super(new WrapLayout(FlowLayout.LEFT, 6, 0));
         this.preferences = preferences;
         this.includeGlobal = includeGlobal;
+
+        scopeCombo.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                            boolean isSelected, boolean cellHasFocus) {
+                Component c = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof WorkspaceScope scope) {
+                    setText(truncateForDisplay(scope.label(), MAX_LABEL_DISPLAY_LENGTH));
+                    setToolTipText(scope.label());
+                }
+                return c;
+            }
+        });
 
         add(new JLabel("Scope:"));
         add(scopeCombo);
@@ -109,9 +128,21 @@ public class WorkspaceScopeBar extends JPanel {
     private void fireScopeChanged() {
         WorkspaceScope scope = getSelectedScope();
         removeWorkspaceButton.setEnabled(scope != null && !scope.isGlobal());
+        // The renderer's tooltip only covers the dropdown popup's list items; the combo's
+        // own closed-box display area needs its tooltip set directly to show the full,
+        // untruncated path for whatever is currently selected.
+        scopeCombo.setToolTipText(scope == null ? null : scope.label());
         for (Consumer<WorkspaceScope> listener : listeners) {
             listener.accept(scope);
         }
+    }
+
+    /** Package-private, for tests: keeps a long pinned-workspace path from ballooning the combo's width. */
+    static String truncateForDisplay(String label, int maxLength) {
+        if (label.length() <= maxLength) {
+            return label;
+        }
+        return "..." + label.substring(label.length() - (maxLength - 3));
     }
 
     private void onAddWorkspace() {

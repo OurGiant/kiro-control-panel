@@ -696,4 +696,22 @@ to infer or remember a scope — kept deliberately simple for this first
 pass rather than adding a submenu of pinned workspaces or tracking
 last-used scope globally.
 
-126 tests total.
+**Found by the user testing the built feature, not by CI**: `WorkspaceScopeBar`'s
+combo box had no cap on displayed text width — a pinned workspace's label
+is its full absolute path, and `JComboBox` sizes itself to its widest
+rendered item, so one long path balloons the combo's (and so the whole
+bar's) preferred width past the window edge, even after resizing. Fixed
+with a custom `ListCellRenderer` that truncates a label longer than 40
+characters to `"..." + <tail>` (keeping the more useful, distinguishing
+end of the path visible rather than the common leading segments), plus a
+tooltip (on both the dropdown items and the combo's own closed-box display
+area, which needs its tooltip set separately — the renderer only covers
+the popup) showing the full untruncated path. Covered by a
+`truncateForDisplay` unit test plus a reflection-based geometry test
+proving the real `JComboBox`'s `getPreferredSize().width` stays bounded
+regardless of pinned-path length, mirroring the `LayoutAssertions`
+technique from the issue #22 suite (construct real components, measure
+real geometry, assert a bound) applied to a single component's own
+intrinsic sizing rather than parent/child clipping.
+
+129 tests total.

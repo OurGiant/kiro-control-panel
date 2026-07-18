@@ -95,6 +95,51 @@ class WorkspaceScopeBarTest {
             "a panel actively viewing one workspace shouldn't have its selection stolen by a pin happening elsewhere");
     }
 
+    @Test
+    void truncateForDisplayLeavesShortLabelsUnchanged() {
+        org.junit.jupiter.api.Assertions.assertEquals("Global",
+            WorkspaceScopeBar.truncateForDisplay("Global", 40));
+        org.junit.jupiter.api.Assertions.assertEquals("/home/me/short-project",
+            WorkspaceScopeBar.truncateForDisplay("/home/me/short-project", 40));
+    }
+
+    @Test
+    void truncateForDisplayShortensLongLabelsKeepingTheTail() {
+        String longPath = "/home/me/deeply/nested/path/that/goes/on/forever/my-actual-project";
+
+        String truncated = WorkspaceScopeBar.truncateForDisplay(longPath, 40);
+
+        org.junit.jupiter.api.Assertions.assertEquals(40, truncated.length());
+        assertTrue(truncated.startsWith("..."), "should elide the (less useful) common-prefix segments");
+        assertTrue(truncated.endsWith("my-actual-project"),
+            "should keep the (more useful, distinguishing) tail of the path visible");
+    }
+
+    @Test
+    void veryLongPinnedWorkspacePathDoesNotBalloonComboWidth() throws Exception {
+        // Regression coverage: a very long pinned workspace path used to balloon
+        // WorkspaceScopeBar's JComboBox (and so the whole bar) far past any
+        // reasonable window width, since JComboBox sizes itself to its widest
+        // rendered item and nothing capped the displayed text length.
+        String longPath = "/tmp/" + "a".repeat(300) + "/workspace-scope-bar-test-" + System.nanoTime();
+        preferences.addWorkspace(longPath);
+        WorkspaceRegistry.notifyChanged();
+
+        WorkspaceScopeBar bar = new WorkspaceScopeBar(preferences);
+        bar.getAvailableScopes().stream()
+            .filter(scope -> longPath.equals(scope.label()))
+            .findFirst()
+            .ifPresent(bar::selectScope);
+
+        var field = WorkspaceScopeBar.class.getDeclaredField("scopeCombo");
+        field.setAccessible(true);
+        javax.swing.JComboBox<?> combo = (javax.swing.JComboBox<?>) field.get(bar);
+
+        assertTrue(combo.getPreferredSize().width < 500,
+            "combo width should stay bounded regardless of pinned workspace path length, was "
+                + combo.getPreferredSize().width);
+    }
+
     private static boolean containsLabel(WorkspaceScopeBar bar, String label) {
         List<WorkspaceScope> scopes = bar.getAvailableScopes();
         return scopes.stream().anyMatch(scope -> label.equals(scope.label()));
