@@ -1,0 +1,590 @@
+[
+  {
+    "slug": "amazon-devices-buildertools-mcp",
+    "name": "Amazon Devices Builder Tools MCP",
+    "description": "The Builder Tools MCP provides context and tools to develop, test, and debug apps for Amazon devices. For detailed and up-to-date capabilities, see the official documentation",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@amazon-devices/amazon-devices-buildertools-mcp@latest"
+      ],
+      "disabled": false
+    }
+  },
+  {
+    "slug": "amplitude-mcp",
+    "name": "Amplitude",
+    "description": "Interact with Amplitude AI-Powered product data, experiments, and user behavior.",
+    "requirement": null,
+    "config": {
+      "url": "https://mcp.amplitude.com/mcp",
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "apify",
+    "name": "Apify",
+    "description": "Connect Kiro with thousands of tools for web scraping, data extraction, and automation. Run Actors, access results, and search Apify documentation.",
+    "requirement": null,
+    "config": {
+      "url": "https://mcp.apify.com/",
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "atlassian-rovo",
+    "name": "Atlassian",
+    "description": "Plan, track, and collaborate across Jira, Confluence, and Compass with the Atlassian Rovo MCP Server.",
+    "requirement": null,
+    "config": {
+      "url": "https://mcp.atlassian.com/v1/mcp/authv2",
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "aws-docs",
+    "name": "AWS Documentation",
+    "description": "Access to AWS documentation, search capabilities, and content recommendations",
+    "requirement": "Requires UV Installed",
+    "config": {
+      "command": "uvx",
+      "args": [
+        "awslabs.aws-documentation-mcp-server@latest"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "azure",
+    "name": "Azure",
+    "description": "Interact with Azure services and resources",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-azure"
+      ],
+      "env": {
+        "AZURE_SUBSCRIPTION_ID": "your-subscription-id"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "bnbchain-mcp",
+    "name": "BNB Chain",
+    "description": "Official BNB Chain MCP: on-chain queries, token/NFT operations, Greenfield storage, and ERC-8004 agent registry for BSC & opBNB",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@bnb-chain/mcp@latest"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "canva-dev",
+    "name": "Canva",
+    "description": "AI-powered development assistance for building Canva apps and integrations. Access Canva documentation, App UI Kit components, and Apps SDK resources.",
+    "requirement": null,
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@canva/cli@latest",
+        "mcp"
+      ]
+    }
+  },
+  {
+    "slug": "chrome-devtools",
+    "name": "Chrome DevTools",
+    "description": "Control and inspect a live Chrome browser with DevTools for automation, debugging, and performance analysis",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "cmc-skill-hub",
+    "name": "CMC Agent Hub",
+    "description": "CoinMarketCap's agent skill hub: precomputed crypto market data, analytics, and strategy-ready signals for AI agents.",
+    "requirement": null,
+    "config": {
+      "url": "https://mcp.coinmarketcap.com/skill-hub/stream",
+      "headers": {
+        "X-CMC-MCP-API-KEY": "${CMC_MCP_API_KEY}"
+      }
+    }
+  },
+  {
+    "slug": "context7",
+    "name": "Context7",
+    "description": "Up-to-date code documentation for any library or framework",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "crowdstrike-falcon-mcp",
+    "name": "CrowdStrike",
+    "description": "Connect AI agents to CrowdStrike Falcon for automated security analysis and threat hunting",
+    "requirement": "Requires UV Installed",
+    "config": {
+      "command": "uvx",
+      "args": [
+        "falcon-mcp"
+      ],
+      "env": {
+        "FALCON_CLIENT_ID": "${FALCON_CLIENT_ID}",
+        "FALCON_CLIENT_SECRET": "${FALCON_CLIENT_SECRET}",
+        "FALCON_BASE_URL": "https://api.crowdstrike.com"
+      },
+      "disabled": true,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "databricks-sql",
+    "name": "Databricks",
+    "description": "Build, govern, and query on the Databricks Data Intelligence Platform with Unity Catalog, Genie, Vector Search, SQL, and AI-assisted development",
+    "requirement": "Requires setup",
+    "config": {
+      "url": "REPLACE_WITH_YOUR_SQL_MCP_URL",
+      "headers": {
+        "Authorization": "Bearer ${DATABRICKS_ACCESS_TOKEN}"
+      },
+      "disabled": true
+    }
+  },
+  {
+    "slug": "datadog",
+    "name": "Datadog",
+    "description": "Interact with Datadog AI-Powered Observability and Security Platform.",
+    "requirement": null,
+    "config": {
+      "url": "https://mcp.datadoghq.com/api/unstable/mcp-server/mcp?toolsets=core,synthetics",
+      "disabled": true,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "docker",
+    "name": "Docker",
+    "description": "Manage Docker containers and images",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-docker"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "dynatrace-mcp-server",
+    "name": "Dynatrace",
+    "description": "Interact with Dynatrace Observability Platform",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@dynatrace-oss/dynatrace-mcp-server@latest"
+      ],
+      "env": {
+        "DT_ENVIRONMENT": "your-dynatrace-url"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "elastic-agent-builder",
+    "name": "Elastic",
+    "description": "Provides a standardized interface for external clients to access Elastic Agent Builder tools to interact with Elasticsearch, AI, Observability and Security platform",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "${ELASTIC_MCP_URL}",
+        "--header",
+        "Authorization: ApiKey ${API_KEY}"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "filesystem",
+    "name": "Filesystem",
+    "description": "Secure file operations within allowed directories",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/path/to/allowed/directory"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "gcloud",
+    "name": "GCP",
+    "description": "Manage Google Cloud Platform resources",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@google-cloud/gcloud-mcp"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "git",
+    "name": "Git",
+    "description": "Read, search, and manipulate Git repositories",
+    "requirement": "Requires UV Installed",
+    "config": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-git"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "github-mcp-server",
+    "name": "GitHub",
+    "description": "Interact with GitHub repositories, issues, and pull requests.",
+    "requirement": null,
+    "config": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "gitlab",
+    "name": "GitLab",
+    "description": "GitLab MCP server allows you to plan, track, and manage issues, merge requests, and pipelines from Kiro.",
+    "requirement": null,
+    "config": {
+      "type": "http",
+      "url": "${GITLAB_MCP_URL}",
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "grafana-cloud",
+    "name": "Grafana Cloud",
+    "description": "Interact with Open Agentic Observability via Grafana Cloud.",
+    "requirement": null,
+    "config": {
+      "url": "https://mcp.grafana.com/mcp",
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "ibm-wxo-docs",
+    "name": "IBM watsonx Orchestrate",
+    "description": "Interact with tools for searching up-to-date documentation about watsonx Orchestrate.",
+    "requirement": null,
+    "config": {
+      "type": "http",
+      "url": "https://developer.watson-orchestrate.ibm.com/mcp"
+    }
+  },
+  {
+    "slug": "kubernetes",
+    "name": "Kubernetes",
+    "description": "Interact with Kubernetes clusters",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-kubernetes"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "memory",
+    "name": "Memory",
+    "description": "Knowledge graph-based persistent memory system for AI agents",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "mongodb",
+    "name": "MongoDB",
+    "description": "Interact with MongoDB databases",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-mongodb"
+      ],
+      "env": {
+        "MONGODB_URI": "your-mongodb-uri"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "neo4j",
+    "name": "Neo4j",
+    "description": "Interact with Neo4j graph databases",
+    "requirement": "Requires neo4j-mcp installed",
+    "config": {
+      "command": "neo4j-mcp",
+      "env": {
+        "NEO4J_URI": "YOUR_NEO4J_URI",
+        "NEO4J_USERNAME": "YOUR_NEO4J_USERNAME",
+        "NEO4J_PASSWORD": "YOUR_NEO4J_PASSWORD",
+        "NEO4J_DATABASE": "YOUR_NEO4J_DATABASE",
+        "NEO4J_READ_ONLY": "false"
+      }
+    }
+  },
+  {
+    "slug": "new-relic-mcp",
+    "name": "New Relic",
+    "description": "Monitor and analyze application performance with the New Relic observability platform.",
+    "requirement": null,
+    "config": {
+      "url": "https://mcp.newrelic.com/mcp/"
+    }
+  },
+  {
+    "slug": "pinecone",
+    "name": "Pinecone",
+    "description": "Vector database for semantic search, RAG workflows, and AI applications",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@pinecone-database/mcp"
+      ],
+      "env": {
+        "PINECONE_API_KEY": "your-api-key"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "tidb",
+    "name": "PingCAP",
+    "description": "Interact with TiDB Cloud, a distributed SQL database with HTAP, vector search, and full read/write support for cloud-native applications",
+    "requirement": "Requires UV Installed",
+    "config": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "pytidb[mcp]",
+        "tidb-mcp-server"
+      ],
+      "env": {
+        "TIDB_HOST": "${TIDB_HOST}",
+        "TIDB_PORT": "${TIDB_PORT}",
+        "TIDB_USERNAME": "${TIDB_USERNAME}",
+        "TIDB_PASSWORD": "${TIDB_PASSWORD}",
+        "TIDB_DATABASE": "${TIDB_DATABASE}",
+        "TIDB_SSL": "true"
+      },
+      "disabled": true
+    }
+  },
+  {
+    "slug": "playwright",
+    "name": "Playwright",
+    "description": "Browser automation with Playwright for web scraping, screenshots, and test code generation",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "postgresql",
+    "name": "PostgreSQL",
+    "description": "Query and manage PostgreSQL databases",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres"
+      ],
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "your-connection-string"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "postman",
+    "name": "Postman",
+    "description": "Interact with your Postman collections, APIs, and environments. Send requests, manage workspaces, and access your API definitions.",
+    "requirement": null,
+    "config": {
+      "type": "http",
+      "url": "https://mcp.postman.com/minimal",
+      "headers": {
+        "Authorization": "Bearer ${POSTMAN_API_KEY}"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "sequential-thinking",
+    "name": "Sequential Thinking",
+    "description": "Dynamic and reflective problem-solving through iterative thinking",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "snowflake",
+    "name": "Snowflake",
+    "description": "Interact with Snowflake services and resources. Official documentation",
+    "requirement": null,
+    "config": {
+      "type": "http",
+      "url": "${SNOWFLAKE_MCP_SERVER_URL}",
+      "headers": {
+        "Authorization": "Bearer ${PAT_TOKEN}",
+        "X-Snowflake-Account": "${SNOWFLAKE_ACCOUNT_IDENTIFIER}"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "strands-agents",
+    "name": "Strands Agent",
+    "description": "Access documentation about Strands Agents",
+    "requirement": "Requires UV Installed",
+    "config": {
+      "command": "uvx",
+      "args": [
+        "strands-agents-mcp-server"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "INFO"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  },
+  {
+    "slug": "terraform",
+    "name": "Terraform",
+    "description": "Access current Terraform provider documentation, modules, and Sentinel policies from the Terraform registry. Manage HCP Terraform and Terraform Enterprise workspaces, variables, tags, and runs",
+    "requirement": "Requires Docker Installed",
+    "config": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "TFE_TOKEN=${TFE_TOKEN}",
+        "hashicorp/terraform-mcp-server"
+      ],
+      "env": {
+        "TFE_TOKEN": "${TFE_TOKEN}"
+      },
+      "disabled": false
+    }
+  },
+  {
+    "slug": "web-search",
+    "name": "Web Search",
+    "description": "Search the web using Brave Search API",
+    "requirement": "Requires Node installed",
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@brave/brave-search-mcp-server",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "your-api-key"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+]

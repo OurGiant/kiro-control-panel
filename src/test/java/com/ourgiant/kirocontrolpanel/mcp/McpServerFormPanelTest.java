@@ -73,6 +73,30 @@ class McpServerFormPanelTest {
     }
 
     @Test
+    void populateFromCatalogShapedDisabledConfigRoundTrips() {
+        // Mirrors a catalog entry needing setup (e.g. CrowdStrike): disabled,
+        // with placeholder env values the user must fill in before enabling.
+        McpServerFormPanel panel = new McpServerFormPanel();
+        McpServerConfig catalogConfig = new McpServerConfig();
+        catalogConfig.setCommand("uvx");
+        catalogConfig.setArgs(List.of("falcon-mcp"));
+        catalogConfig.setEnv(java.util.Map.of(
+            "FALCON_CLIENT_ID", "${FALCON_CLIENT_ID}",
+            "FALCON_CLIENT_SECRET", "${FALCON_CLIENT_SECRET}"));
+        catalogConfig.setDisabled(true);
+        catalogConfig.setAutoApprove(List.of());
+
+        panel.populateFrom(catalogConfig);
+        McpServerConfig rebuilt = panel.buildServer();
+
+        assertEquals("uvx", rebuilt.getCommand());
+        assertEquals(List.of("falcon-mcp"), rebuilt.getArgs());
+        assertEquals("${FALCON_CLIENT_ID}", rebuilt.getEnv().get("FALCON_CLIENT_ID"));
+        assertEquals("${FALCON_CLIENT_SECRET}", rebuilt.getEnv().get("FALCON_CLIENT_SECRET"));
+        assertTrue(rebuilt.isDisabled(), "catalog's disabled:true should survive the form round-trip");
+    }
+
+    @Test
     void switchingFormToRawJsonTabSerializesCurrentFormState() throws Exception {
         McpServerFormPanel panel = new McpServerFormPanel();
         panel.setDefaultsForNewServer();

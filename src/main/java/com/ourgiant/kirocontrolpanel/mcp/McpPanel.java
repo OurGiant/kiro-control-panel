@@ -64,6 +64,9 @@ public class McpPanel extends JPanel {
         addButton.setMnemonic(KeyEvent.VK_A);
         addButton.addActionListener(e -> onAdd());
 
+        JButton browseCatalogButton = new JButton("Browse Catalog...");
+        browseCatalogButton.addActionListener(e -> onBrowseCatalog());
+
         editButton = new JButton("Edit...");
         editButton.setMnemonic(KeyEvent.VK_E);
         editButton.addActionListener(e -> onEdit());
@@ -83,7 +86,7 @@ public class McpPanel extends JPanel {
         revealButton.addActionListener(e -> onReveal());
 
         return SwingLayoutUtils.createVerticalButtonPanel(
-            addButton, editButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
+            addButton, browseCatalogButton, editButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
     }
 
     private WorkspaceScope currentScope() {
@@ -144,6 +147,13 @@ public class McpPanel extends JPanel {
             persist();
             reloadTable();
         }
+    }
+
+    private void onBrowseCatalog() {
+        McpCatalogDialog dialog = new McpCatalogDialog(
+            (Frame) SwingUtilities.getWindowAncestor(this), tableModel::getConfig,
+            () -> { persist(); reloadTable(); });
+        dialog.setVisible(true);
     }
 
     private void onEdit() {
