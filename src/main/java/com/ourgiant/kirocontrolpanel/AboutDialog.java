@@ -38,7 +38,7 @@ public class AboutDialog extends JDialog {
         // calculation is unreliable for wrapping (see FirstRunDialog's sizing fix), so a
         // snug viewport tends to read as "too small"/borderline-scrolling rather than
         // actually being cut off.
-        scrollPane.setPreferredSize(new Dimension(420, 200));
+        scrollPane.setPreferredSize(new Dimension(420, 300));
         add(scrollPane, BorderLayout.CENTER);
 
         JLabel updateLabel = new JLabel("Checking for updates...");
