@@ -687,4 +687,13 @@ rather than overclaimed:**
   particular can only be confirmed by a real user on real hardware; that's
   expected first-run behavior, not a bug, and is called out in release notes.
 
+**Also on the tray icon's own right-click menu** (`TrayApp.java`), not just
+`WorkspaceScopeBar` — a "Launch kiro-cli..." item between "Show" and
+"Exit". The tray menu has no "currently selected scope" concept the way a
+panel's `WorkspaceScopeBar` does (nothing is "selected" at the tray-icon
+level), so this always launches in the home directory rather than trying
+to infer or remember a scope — kept deliberately simple for this first
+pass rather than adding a submenu of pinned workspaces or tracking
+last-used scope globally.
+
 126 tests total.
