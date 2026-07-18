@@ -42,9 +42,8 @@ jobs:
             --name "Kiro Control Panel" \
             --app-version ${{ steps.version.outputs.version }} \
             --type app-image \
+            --icon src/packaging/app-icon.ico \
             --dest installer-output
-        # TODO: add --icon src/packaging/app-icon.ico once a real designed
-        # icon exists (jpackage uses its default icon without one).
 
       - name: Zip app image
         if: startsWith(github.ref, 'refs/tags/v')
@@ -146,9 +145,8 @@ jobs:
             --app-version ${{ steps.version.outputs.version }} \
             --vendor OurGiant \
             --type dmg \
+            --icon src/packaging/app-icon.icns \
             --dest installer-output
-        # TODO: add --icon src/packaging/app-icon.icns once a real designed
-        # icon exists (jpackage uses its default icon without one).
 
       - name: Rename dmg for this architecture
         if: startsWith(github.ref, 'refs/tags/v')
