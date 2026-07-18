@@ -607,3 +607,84 @@ bounds) as the real incident, then restored `WrapLayout` and confirmed all
 9 pass again.
 
 113 tests total.
+
+## Launch kiro-cli in an independent terminal window (issue #24)
+
+Bridges this app's config management and kiro-cli's actual interactive
+sessions without becoming a chat client: a "Launch kiro-cli..." button in
+`WorkspaceScopeBar` (so it's available from every panel that embeds one)
+spawns `kiro-cli` in a brand new, completely independent OS-native terminal
+window, in whatever directory the current scope points to (a pinned
+workspace root, or the user's home directory for Global — `~/.kiro` is a
+config dir, not a place to work). The app never reads, controls, or drives
+the session afterward, same spirit as the existing "Reveal File..."
+buttons. An embedded terminal/PTY was considered and explicitly rejected
+first — see `[[feedback_not_a_chat_client_boundary]]`-class prior
+decision — this stays a pure launcher.
+
+**Scoped to exactly three terminals in v1**, per explicit decision: macOS
+Terminal.app, Windows PowerShell 7 (`pwsh.exe`, not the older
+`powershell.exe`), and Ubuntu's `gnome-terminal`. No fallback chain through
+other terminal emulators — documented in release notes, other terminals
+are GitHub issue feature requests if wanted, not a v1 goal.
+
+`util/KiroSessionLauncher.java` mirrors the `DesktopUtils`/`ProcessDetacher`
+split established earlier: pure, parameterized, fully unit-tested
+command-building logic (`detect()`, one command-array builder per OS, PATH-scan
+helpers) plus a thin, side-effecting `launchSession()` wrapper that follows
+`DesktopUtils`'s dialog+log error convention (nothing fails silently, since
+this is always a direct button click) rather than `ProcessDetacher`'s
+silent-boolean convention (appropriate there for a background relaunch,
+not here).
+
+**Two escaping layers on macOS, one each elsewhere, all real-world
+verified rather than hand-trusted:**
+- Linux: no escaping needed at all — `ProcessBuilder` passes argv directly
+  (no shell), so the directory is one array element handed straight to
+  `gnome-terminal --working-directory=`.
+- Windows: PowerShell single-quote escaping (`'` → `''`), used with
+  `-LiteralPath` specifically to avoid wildcard/provider expansion on `[`,
+  `]`, `*` that `-Path` would trigger.
+- macOS: POSIX shell single-quote escaping (`'` → `'\''`) for the inner
+  `cd '<dir>' && kiro-cli`, then AppleScript double-quoted string-literal
+  escaping (backslash first, then quote — order matters) of that whole
+  result, since it's embedded in an `osascript -e 'do script "..."'` call.
+
+The shell-escaping layer is verified by actually invoking a real `bash -c
+"printf '%s' '<escaped>'"` in the test and comparing output to the
+original string, for several adversarial inputs (spaces, `'`, `"`) — the
+strongest available proof for that layer, not just a hand-derived expected
+string. The PowerShell and AppleScript layers use round-trip tests
+instead (encode then manually reverse, assert equality) since neither
+interpreter is available in this dev environment — safer than hand-tracing
+a two-layer nested escape by eye, which is exactly the kind of arithmetic
+a person gets subtly wrong.
+
+**Discovered by actually reading the installed binary, not assumed**:
+Ubuntu's `/usr/bin/gnome-terminal` is a Canonical Python wrapper
+(`Gio.Subprocess` + `wait_async`) that blocks until the spawned terminal
+*window* closes, not just until the terminal server starts — so
+`launchSession` never calls `waitFor()` on the Linux/Windows paths (fire
+and forget only), and macOS is the one platform where a short bounded
+`waitFor(5s)` on `osascript` itself is safe (it's a short-lived Apple-Event
+dispatcher, not the terminal session).
+
+**Verification is asymmetric across the three platforms, stated plainly
+rather than overclaimed:**
+- Linux: unit tests + a real manual smoke test on this dev host — clicked
+  the actual button, confirmed a real `gnome-terminal` window opened and
+  `kiro-cli` launched correctly in the right directory (then cleaned up
+  the spawned session, since it was a live kiro-cli process using real
+  resources, not something to leave running unattended).
+- macOS/Windows: the pure command-building/escaping logic gets exercised
+  for free on real `macos-latest`/`macos-15-intel`/`windows-latest` CI
+  runners via the existing `build.yml` matrix (no separate dispatch job
+  needed — `KiroSessionLauncherTest` is a normal `*Test.java` file, picked
+  up by the `mvn package` every build job already runs). What CI *cannot*
+  prove: whether a real, visible, focused GUI terminal window actually
+  appears and behaves correctly — CI runners aren't attended interactive
+  sessions. macOS's one-time Automation/Accessibility permission prompt in
+  particular can only be confirmed by a real user on real hardware; that's
+  expected first-run behavior, not a bug, and is called out in release notes.
+
+126 tests total.

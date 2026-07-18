@@ -23,6 +23,10 @@ and ruled out for usage/credit tracking.
   `.kiro/hooks/*.json`, with the same Form/Raw JSON editing
 - **Agents**: create/edit/delete `.kiro/agents/*.json` custom agent configs,
   with a Form editor for the common fields and Raw JSON for the rest
+- **Launch kiro-cli...**: opens an independent terminal window (macOS
+  Terminal.app, Windows PowerShell 7, or Ubuntu's GNOME Terminal) running
+  `kiro-cli` in the current scope's directory — the app never reads or
+  drives the session, it's just a launcher
 - **Tray-resident**: minimizes to the system tray instead of exiting; FlatLaf
   theming (light/dark/IntelliJ themes) under Config > Theme
 

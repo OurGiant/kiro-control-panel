@@ -5,6 +5,8 @@ import com.ourgiant.kirocontrolpanel.WorkspaceScope;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.KeyEvent;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +51,11 @@ public class WorkspaceScopeBar extends JPanel {
         removeWorkspaceButton = new JButton("Remove Workspace");
         removeWorkspaceButton.addActionListener(e -> onRemoveWorkspace());
         add(removeWorkspaceButton);
+
+        JButton launchTerminalButton = new JButton("Launch kiro-cli...");
+        launchTerminalButton.setMnemonic(KeyEvent.VK_L);
+        launchTerminalButton.addActionListener(e -> onLaunchTerminal());
+        add(launchTerminalButton);
 
         scopeCombo.addActionListener(e -> fireScopeChanged());
         reload();
@@ -142,5 +149,15 @@ public class WorkspaceScopeBar extends JPanel {
         }
         preferences.removeWorkspace(scope.label());
         WorkspaceRegistry.notifyChanged();
+    }
+
+    private void onLaunchTerminal() {
+        WorkspaceScope scope = getSelectedScope();
+        // Global has no project directory of its own (~/.kiro is config, not a place to
+        // work), so fall back to the user's home directory rather than KiroPaths.globalKiroHome().
+        Path dir = (scope == null || scope.isGlobal())
+            ? Paths.get(System.getProperty("user.home"))
+            : scope.workspaceRoot();
+        KiroSessionLauncher.launchSession(this, dir);
     }
 }
