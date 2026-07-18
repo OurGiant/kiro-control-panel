@@ -2,6 +2,7 @@ package com.ourgiant.kirocontrolpanel;
 
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
+import com.ourgiant.kirocontrolpanel.util.KiroSessionLauncher;
 import com.ourgiant.kirocontrolpanel.util.ProcessDetacher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,6 +13,7 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Paths;
 
 /**
  * Entry point. Boots the tray icon and keeps the app resident there; the
@@ -80,9 +82,15 @@ public class TrayApp {
             PopupMenu trayMenu = new PopupMenu();
             MenuItem showItem = new MenuItem("Show");
             showItem.addActionListener(e -> restoreFromTray());
+            MenuItem launchTerminalItem = new MenuItem("Launch kiro-cli...");
+            // Tray menu has no "current scope" concept the way WorkspaceScopeBar does
+            // (nothing is "selected" here), so this always launches in the home directory.
+            launchTerminalItem.addActionListener(e ->
+                KiroSessionLauncher.launchSession(mainWindow, Paths.get(System.getProperty("user.home"))));
             MenuItem exitItem = new MenuItem("Exit");
             exitItem.addActionListener(e -> exitApplication());
             trayMenu.add(showItem);
+            trayMenu.add(launchTerminalItem);
             trayMenu.addSeparator();
             trayMenu.add(exitItem);
 
