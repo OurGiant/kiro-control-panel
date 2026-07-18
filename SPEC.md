@@ -532,3 +532,53 @@ reference and `@JsonIgnore` gap) caught only by driving the real UI, not by
 deciding how much manual/E2E verification a change needs before it ships.
 
 101 tests total.
+
+## Headless layout-clipping regression suite (issue #22)
+
+Closes the gap the previous entry called out: automated coverage that
+would have caught issue #18 (`WorkspaceScopeBar` clipped at a narrow
+window width) before it shipped. `testsupport/LayoutAssertions.java` +
+`testsupport/PanelLayoutClippingTest.java` check every `JPanel`-rooted
+component `MainWindow` can show (the 6 tabs + 3 reusable dialog form
+panels) for clipped children at the app's real default size (900×600) and
+a deliberately narrow one (300×600, matching the diagnostic width that
+originally found #18). Deliberately excludes the 11 `JDialog`/`JFrame`
+classes — `Window` construction itself is what's blocked headlessly in
+this project's CI, not layout computation; those stay covered only by the
+manual `verify`/`verify-java-swing` process. No new CI infrastructure
+needed: `pom.xml` has no Surefire include/exclude, so these are just two
+more `*Test.java` files every existing `mvn package` job already picks up.
+
+**Two real bugs caught while building this, both before either landed
+anywhere near "done":**
+
+1. `Container.validate()` doesn't reliably trigger layout in this fully
+   headless setup (no peer at all, not even a dummy one) — its own
+   `isValid()`/peer bookkeeping silently no-ops, leaving descendants at
+   `(0,0,0,0)`. Found by writing `LayoutAssertions`' own negative-control
+   self-test first (a deliberately-broken `FlowLayout` fixture that must
+   throw) and watching it *not* throw — proving the utility itself was
+   broken before it was ever pointed at a real component. Fixed by walking
+   the tree manually, calling `doLayout()` (which does work) one container
+   level at a time, confirmed against a standalone diagnostic before
+   committing to the fix.
+2. Once pointed at the real panels, `PanelLayoutClippingTest` immediately
+   found a second, previously-unknown clipping bug: `UsagePanel`'s
+   `JEditorPane` note sat directly in `BorderLayout.NORTH` with no
+   `JScrollPane` — same mechanism class as #18 (a `NORTH` child's
+   allocated height depends on its own `preferredSize()`, which for HTML
+   content depends on the width it reflows at), but with no scrollbar
+   fallback at all, so a narrow width could clip text with no way to see
+   the rest. Fixed by wrapping it in a `JScrollPane` in `CENTER`, matching
+   the pattern already used everywhere else in this app for exactly this
+   kind of content.
+
+**Verification that the suite actually would have caught #18** (not just
+plausibly might have): temporarily reverted `WorkspaceScopeBar` back to
+plain `FlowLayout` and confirmed exactly the 5 panels that embed it
+(MCP/Steering/Skills/Hooks/Agents) failed with the identical clipping
+signature ("Remove Workspace" button exceeding `WorkspaceScopeBar`'s
+bounds) as the real incident, then restored `WrapLayout` and confirmed all
+9 pass again.
+
+113 tests total.

@@ -22,7 +22,14 @@ public class UsagePanel extends JPanel {
         note.setOpaque(false);
         note.setBorder(null);
 
-        add(note, BorderLayout.NORTH);
+        // Scrollable, not BorderLayout.NORTH directly: NORTH sizes its child to
+        // the child's own reported preferredSize().height, which for a JEditorPane
+        // rendering HTML depends on the width it reflows at -- at a narrow window
+        // width the note can need more vertical space than was allocated, with no
+        // way to see the rest if it's clipped outright (issue #22 caught this).
+        JScrollPane scrollPane = new JScrollPane(note);
+        scrollPane.setBorder(null);
+        add(scrollPane, BorderLayout.CENTER);
     }
 
     private static String buildHtml() {
