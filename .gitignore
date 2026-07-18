@@ -53,3 +53,4 @@ Thumbs.db
 *.tmp
 *.swp
 *.bak
+installer-output/

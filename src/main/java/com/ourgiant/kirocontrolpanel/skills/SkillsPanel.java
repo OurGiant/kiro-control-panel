@@ -3,6 +3,7 @@ package com.ourgiant.kirocontrolpanel.skills;
 import com.ourgiant.kirocontrolpanel.AppPreferences;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.WorkspaceScope;
+import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,7 @@ public class SkillsPanel extends JPanel {
     private static final Pattern VALID_SKILL_FOLDER_NAME = Pattern.compile("[a-z0-9][a-z0-9-]*");
 
     private final SkillService skillService = new SkillService();
+    private final DirectoryWatcher watcher;
     private final WorkspaceScopeBar scopeBar;
 
     private final DefaultListModel<Skill> skillListModel = new DefaultListModel<>();
@@ -33,9 +35,11 @@ public class SkillsPanel extends JPanel {
     private JButton editButton;
     private JButton deleteButton;
 
-    public SkillsPanel(AppPreferences preferences) {
+    public SkillsPanel(AppPreferences preferences, DirectoryWatcher watcher) {
         super(new BorderLayout(8, 8));
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        this.watcher = watcher;
+        watcher.addListener(this::reloadSkillList);
 
         scopeBar = new WorkspaceScopeBar(preferences);
         scopeBar.addScopeChangeListener(scope -> reloadSkillList());
@@ -98,7 +102,14 @@ public class SkillsPanel extends JPanel {
                 : skillService.listWorkspace(scope.workspaceRoot());
             for (Skill skill : skills) {
                 skillListModel.addElement(skill);
+                // Watching only the parent skills/ dir catches add/remove of a whole
+                // skill folder, not edits to an existing skill's own files, so each
+                // skill's folder needs its own registration too.
+                watcher.watch(skill.getSkillDir());
             }
+            watcher.watch(scope.isGlobal()
+                ? KiroPaths.globalSkillsDir()
+                : KiroPaths.workspaceSkillsDir(scope.workspaceRoot()));
         }
         updateButtonState();
     }

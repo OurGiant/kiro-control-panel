@@ -3,6 +3,7 @@ package com.ourgiant.kirocontrolpanel.mcp;
 import com.ourgiant.kirocontrolpanel.AppPreferences;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.WorkspaceScope;
+import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.RawJsonEditorDialog;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
@@ -23,6 +24,7 @@ public class McpPanel extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(McpPanel.class);
 
     private final McpConfigService configService = new McpConfigService();
+    private final DirectoryWatcher watcher;
     private final WorkspaceScopeBar scopeBar;
 
     private final McpServerTableModel tableModel = new McpServerTableModel();
@@ -32,9 +34,11 @@ public class McpPanel extends JPanel {
     private JButton removeButton;
     private JButton toggleEnabledButton;
 
-    public McpPanel(AppPreferences preferences) {
+    public McpPanel(AppPreferences preferences, DirectoryWatcher watcher) {
         super(new BorderLayout(8, 8));
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        this.watcher = watcher;
+        watcher.addListener(this::reloadTable);
 
         scopeBar = new WorkspaceScopeBar(preferences);
         scopeBar.addScopeChangeListener(scope -> reloadTable());
@@ -104,6 +108,11 @@ public class McpPanel extends JPanel {
             : (scope.isGlobal() ? configService.loadGlobal() : configService.loadWorkspace(scope.workspaceRoot()));
         tableModel.setConfig(config);
         updateButtonState();
+
+        Path configPath = currentConfigPath();
+        if (configPath != null) {
+            watcher.watch(configPath.getParent());
+        }
     }
 
     private void updateButtonState() {

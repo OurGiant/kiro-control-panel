@@ -5,6 +5,7 @@ import com.ourgiant.kirocontrolpanel.mcp.McpPanel;
 import com.ourgiant.kirocontrolpanel.skills.SkillsPanel;
 import com.ourgiant.kirocontrolpanel.steering.SteeringPanel;
 import com.ourgiant.kirocontrolpanel.usage.UsagePanel;
+import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +25,7 @@ public class MainWindow extends JFrame {
     private final AppPreferences preferences;
     private Runnable quitHandler = () -> System.exit(0);
 
-    public MainWindow(AppPreferences preferences) {
+    public MainWindow(AppPreferences preferences, DirectoryWatcher watcher) {
         super("Kiro Control Panel");
         this.preferences = preferences;
 
@@ -32,10 +33,10 @@ public class MainWindow extends JFrame {
         setJMenuBar(createMenuBar());
 
         JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("MCP Servers", new McpPanel(preferences));
-        tabs.addTab("Steering", new SteeringPanel(preferences));
-        tabs.addTab("Skills", new SkillsPanel(preferences));
-        tabs.addTab("Hooks", new HooksPanel(preferences));
+        tabs.addTab("MCP Servers", new McpPanel(preferences, watcher));
+        tabs.addTab("Steering", new SteeringPanel(preferences, watcher));
+        tabs.addTab("Skills", new SkillsPanel(preferences, watcher));
+        tabs.addTab("Hooks", new HooksPanel(preferences, watcher));
         tabs.addTab("Usage", new UsagePanel());
         setContentPane(tabs);
 

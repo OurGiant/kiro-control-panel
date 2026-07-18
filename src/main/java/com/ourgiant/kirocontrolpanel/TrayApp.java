@@ -1,5 +1,6 @@
 package com.ourgiant.kirocontrolpanel;
 
+import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,6 +9,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 
 /**
  * Entry point. Boots the tray icon and keeps the app resident there; the
@@ -29,7 +32,14 @@ public class TrayApp {
     private void start() {
         ThemeManager.applyTheme(preferences.getTheme());
 
-        mainWindow = new MainWindow(preferences);
+        DirectoryWatcher watcher;
+        try {
+            watcher = new DirectoryWatcher();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to start file watcher", e);
+        }
+
+        mainWindow = new MainWindow(preferences, watcher);
         mainWindow.setQuitHandler(this::exitApplication);
         mainWindow.addWindowListener(new WindowAdapter() {
             @Override
@@ -46,6 +56,11 @@ public class TrayApp {
         initializeSystemTray();
         mainWindow.setVisible(true);
         syncWindowPositionWithWindowManager(mainWindow);
+
+        if (!preferences.isFirstRunComplete()) {
+            new FirstRunDialog(mainWindow).setVisible(true);
+            preferences.setFirstRunComplete(true);
+        }
     }
 
     private void initializeSystemTray() {

@@ -3,6 +3,7 @@ package com.ourgiant.kirocontrolpanel.steering;
 import com.ourgiant.kirocontrolpanel.AppPreferences;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.WorkspaceScope;
+import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +24,7 @@ public class SteeringPanel extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(SteeringPanel.class);
 
     private final SteeringService steeringService = new SteeringService();
+    private final DirectoryWatcher watcher;
     private final WorkspaceScopeBar scopeBar;
 
     private final DefaultListModel<SteeringDoc> docListModel = new DefaultListModel<>();
@@ -31,9 +33,11 @@ public class SteeringPanel extends JPanel {
     private JButton editButton;
     private JButton deleteButton;
 
-    public SteeringPanel(AppPreferences preferences) {
+    public SteeringPanel(AppPreferences preferences, DirectoryWatcher watcher) {
         super(new BorderLayout(8, 8));
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        this.watcher = watcher;
+        watcher.addListener(this::reloadDocList);
 
         scopeBar = new WorkspaceScopeBar(preferences);
         scopeBar.addScopeChangeListener(scope -> reloadDocList());
@@ -97,6 +101,9 @@ public class SteeringPanel extends JPanel {
             for (SteeringDoc doc : docs) {
                 docListModel.addElement(doc);
             }
+            watcher.watch(scope.isGlobal()
+                ? KiroPaths.globalSteeringDir()
+                : KiroPaths.workspaceSteeringDir(scope.workspaceRoot()));
         }
         updateButtonState();
     }

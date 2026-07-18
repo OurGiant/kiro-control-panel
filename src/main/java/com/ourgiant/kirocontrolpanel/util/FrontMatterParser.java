@@ -1,7 +1,9 @@
 package com.ourgiant.kirocontrolpanel.util;
 
 import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -41,7 +43,12 @@ public final class FrontMatterParser {
             body = body.substring(1);
         }
 
-        Object loaded = new Yaml().load(yamlBlock);
+        // Explicit SafeConstructor rather than the bare Yaml() default: front matter
+        // can come from a pinned workspace's files, so this must stay restricted to
+        // plain data (maps/lists/scalars) even if a future dependency change or edit
+        // elsewhere ever alters what the library's default constructor allows.
+        Yaml safeYaml = new Yaml(new SafeConstructor(new LoaderOptions()));
+        Object loaded = safeYaml.load(yamlBlock);
         Map<String, Object> frontMatter = new LinkedHashMap<>();
         if (loaded instanceof Map<?, ?> map) {
             for (Map.Entry<?, ?> entry : map.entrySet()) {

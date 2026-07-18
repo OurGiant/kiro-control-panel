@@ -1,7 +1,9 @@
 package com.ourgiant.kirocontrolpanel.hooks;
 
 import com.ourgiant.kirocontrolpanel.AppPreferences;
+import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.WorkspaceScope;
+import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.RawJsonEditorDialog;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
@@ -27,6 +29,7 @@ public class HooksPanel extends JPanel {
     private static final int DEFAULT_TIMEOUT_SECONDS = 60;
 
     private final HookService hookService = new HookService();
+    private final DirectoryWatcher watcher;
     private final WorkspaceScopeBar scopeBar;
 
     private final HookTableModel tableModel = new HookTableModel();
@@ -37,9 +40,11 @@ public class HooksPanel extends JPanel {
     private JButton toggleEnabledButton;
     private JButton rawJsonButton;
 
-    public HooksPanel(AppPreferences preferences) {
+    public HooksPanel(AppPreferences preferences, DirectoryWatcher watcher) {
         super(new BorderLayout(8, 8));
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        this.watcher = watcher;
+        watcher.addListener(this::reloadTable);
 
         scopeBar = new WorkspaceScopeBar(preferences, false);
         scopeBar.addScopeChangeListener(scope -> reloadTable());
@@ -95,6 +100,10 @@ public class HooksPanel extends JPanel {
         List<HookEntry> entries = scope == null ? List.of() : hookService.listWorkspace(scope.workspaceRoot());
         tableModel.setEntries(entries);
         updateButtonState();
+
+        if (scope != null) {
+            watcher.watch(KiroPaths.workspaceHooksDir(scope.workspaceRoot()));
+        }
     }
 
     private void updateButtonState() {

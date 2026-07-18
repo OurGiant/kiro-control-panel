@@ -110,18 +110,21 @@ Kiro's own behavior.
 ```
 com.ourgiant.kirocontrolpanel/
 ├── TrayApp.java              # main() + tray icon lifecycle, X11 popup-position fix
-├── MainWindow.java           # JFrame, tabbed panels
+├── MainWindow.java           # JFrame, tabbed panels, File/Config menus
+├── FirstRunDialog.java       # one-time welcome dialog
 ├── ThemeManager.java         # ported from aws-idp-saml-ui
-├── AppPreferences.java       # recent workspaces, theme, window bounds
+├── AppPreferences.java       # recent workspaces, theme, window bounds, first-run flag
 ├── KiroPaths.java            # resolves ~/.kiro vs KIRO_HOME, workspace .kiro
 ├── WorkspaceScope.java       # Global-vs-workspace scope record, shared across panels
 ├── mcp/        McpServerConfig.java McpConfigFile.java McpConfigService.java
-│               McpServerTableModel.java McpPanel.java McpServerEditDialog.java McpRawJsonDialog.java
+│               McpServerTableModel.java McpPanel.java McpServerEditDialog.java
 ├── steering/   SteeringDoc.java SteeringService.java SteeringPanel.java SteeringEditorDialog.java
 ├── skills/     Skill.java SkillService.java SkillsPanel.java SkillEditorDialog.java
-├── hooks/      Hook.java HookService.java HooksPanel.java HookEditDialog.java   # M4, not yet built
+├── hooks/      Hook.java HookAction.java HookFile.java HookEntry.java HookService.java
+│               HookTableModel.java HooksPanel.java HookEditDialog.java
 ├── usage/      UsagePanel.java   # static "held" note, see Non-goals
-└── util/       FrontMatterParser.java WorkspaceScopeBar.java IconFactory.java
+└── util/       FrontMatterParser.java JsonMapperFactory.java WorkspaceScopeBar.java
+                RawJsonEditorDialog.java DirectoryWatcher.java IconFactory.java
 ```
 
 ## Milestones
@@ -138,6 +141,26 @@ com.ourgiant.kirocontrolpanel/
   `{"version":"v1","hooks":[...]}` — confirmed against kiro.dev docs rather
   than assumed).
 - **M5** — held, not a real feature. See Non-goals — static note only.
-- **M6** — not started. Polish: live file watching, first-run onboarding,
-  native packaging (jpackage/icns/ico) mirroring
-  `aws-idp-saml-ui/src/packaging/`.
+- **M6** — done, with one known gap. Live file watching (`DirectoryWatcher`,
+  shared/debounced `WatchService`, wired into all four panels — Skills
+  additionally watches each individual skill's own folder since a top-level
+  watch only catches add/remove, not edits to an existing skill's files);
+  first-run welcome dialog; native packaging via `jpackage` (bundled with
+  the JDK, no separate install). Verified locally: `app-image` build reaches
+  `MainWindow`'s `JFrame` construction before failing on "no X display" —
+  the same point a plain `java -jar` run fails at in this headless
+  container, confirming the packaging itself is correct. `.deb` isn't
+  buildable in the `festive_bardeen` container (no `dpkg-deb`), and
+  Windows/macOS installers can't be built at all outside their own OS
+  (`jpackage` doesn't cross-compile) — both are wired into
+  `.github/workflows/build.yml` (mirroring `aws-idp-saml-ui`'s matrix) to
+  build on GitHub's real runners on tag push instead.
+  **Known gap:** `app-icon.png` is generated at build time from
+  `IconFactory`'s runtime-drawn icon (good enough for Linux, which accepts
+  PNG directly), but Windows/macOS need real `.ico`/`.icns` files, which
+  this environment can't reliably produce (no ImageIO ICO/ICNS writer, no
+  Pillow/ImageMagick, no package manager to install one). Windows/macOS
+  builds currently fall back to jpackage's default icon — swap in real
+  designed assets at `src/packaging/app-icon.ico` / `app-icon.icns` and
+  uncomment the `--icon` flags in `build.yml` when they exist (see the TODO
+  comments there).

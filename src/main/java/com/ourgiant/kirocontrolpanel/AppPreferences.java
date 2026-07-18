@@ -17,6 +17,7 @@ public class AppPreferences {
     private static final String KEY_WINDOW_Y = "windowY";
     private static final String KEY_WINDOW_WIDTH = "windowWidth";
     private static final String KEY_WINDOW_HEIGHT = "windowHeight";
+    private static final String KEY_FIRST_RUN_COMPLETE = "firstRunComplete";
 
     private static final String WORKSPACE_DELIMITER = "\n";
     private static final String DEFAULT_THEME = "GitHub Dark";
@@ -77,5 +78,13 @@ public class AppPreferences {
         prefs.putInt(KEY_WINDOW_Y, y);
         prefs.putInt(KEY_WINDOW_WIDTH, width);
         prefs.putInt(KEY_WINDOW_HEIGHT, height);
+    }
+
+    public boolean isFirstRunComplete() {
+        return prefs.getBoolean(KEY_FIRST_RUN_COMPLETE, false);
+    }
+
+    public void setFirstRunComplete(boolean complete) {
+        prefs.putBoolean(KEY_FIRST_RUN_COMPLETE, complete);
     }
 }
