@@ -7,11 +7,11 @@
 
     <groupId>com.ourgiant</groupId>
     <artifactId>kiro-control-panel</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
     <packaging>jar</packaging>
 
     <name>Kiro Control Panel</name>
-    <description>System-tray Swing app for managing Kiro's MCP servers, steering docs, skills, and hooks outside the IDE</description>
+    <description>System-tray Swing app for managing Kiro's MCP servers, steering docs, skills, hooks, and agents outside the IDE</description>
 
     <properties>
         <maven.compiler.source>24</maven.compiler.source>
