@@ -330,3 +330,48 @@ guaranteed, given the upstream issues are still open — the system tray
 gap is unaffected either way.
 
 63 tests total (up from 56).
+
+## Linux terminal/logging/launcher fix (issue #9)
+
+Running the installed `.deb`/`.rpm` binary directly from a terminal
+(`/opt/kiro-control-panel/bin/kiro-control-panel`) blocked the shell for
+the app's entire lifetime and dumped the full logback stream to stdout —
+neither is normal or wanted for a tray-resident GUI app. Three changes:
+
+1. **Logging**: removed `logback.xml`'s `ConsoleAppender`; logs go only to
+   `~/.kiro-control-panel/logs/app.log` (already viewable via "View
+   Logs..." in the Help menu, from the Tier 3 polish pass).
+2. **Terminal prompt**: added `util/ProcessDetacher`, called first thing in
+   `TrayApp.main()`. On Linux, when running as the packaged native
+   launcher (detected by checking `ProcessHandle.current().info().command()`
+   isn't `java`/`javaw` — i.e. not a dev `java -jar` run), it relaunches
+   itself with `ProcessBuilder` (stdio redirected to `/dev/null`, a
+   `KIRO_CONTROL_PANEL_DETACHED=1` env var set to prevent re-triggering)
+   and returns immediately, so the invoking shell gets its prompt back
+   without ever touching Swing/AWT in the original process. Windows/macOS
+   are untouched — this is scoped to the Linux terminal-blocking complaint
+   specifically.
+3. **PATH-accessible command**: overrode jpackage's Debian `postinst`/
+   `prerm` templates (`src/packaging/linux/postinst`, `.../prerm`) via the
+   same `--resource-dir` mechanism as the `.desktop` fix, adding exactly
+   one line to each (`ln -sf /opt/kiro-control-panel/bin/kiro-control-panel
+   /usr/bin/kiro-control-panel` on install, `rm -f
+   .../kiro-control-panel` on uninstall) so `kiro-control-panel` works from
+   anywhere without users needing the full path. Diffed against jpackage's
+   extracted originals (`jdk.jpackage.internal.resources/template.postinst`
+   `/template.prerm`) to confirm every existing token
+   (`LAUNCHER_AS_SERVICE_SCRIPTS`, `DESKTOP_COMMANDS_INSTALL`/
+   `_UNINSTALL`, etc.) is untouched, and `sh -n` confirms both are
+   syntactically valid. Unlike the `.desktop` template (shared by both the
+   rpm and deb bundlers, so verifiable locally via `--type rpm`),
+   `postinst`/`prerm` are Debian-specific with no rpm equivalent — this
+   couldn't be built or run end-to-end in the `festive_bardeen` container
+   (no `dpkg-deb`, and it's not installable via `dnf` on Amazon Linux
+   2023). The literal install path (`/opt/kiro-control-panel/bin/...`) was
+   confirmed from the user's own real installed-`.deb` terminal output
+   rather than guessed, so the symlink target is verified even though the
+   maintainer-script mechanics aren't; full confirmation only happens once
+   an actual tagged release builds the real `.deb` on GitHub's Ubuntu
+   runner.
+
+72 tests total.

@@ -2,6 +2,7 @@ package com.ourgiant.kirocontrolpanel;
 
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
+import com.ourgiant.kirocontrolpanel.util.ProcessDetacher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,9 @@ public class TrayApp {
     private TrayIcon trayIcon;
 
     public static void main(String[] args) {
+        if (ProcessDetacher.relaunchDetached(args)) {
+            return;
+        }
         SwingUtilities.invokeLater(() -> new TrayApp().start());
     }
 
