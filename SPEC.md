@@ -202,15 +202,19 @@ of being verified by hand each time.
   (`jpackage` doesn't cross-compile) — both are wired into
   `.github/workflows/build.yml` (mirroring `aws-idp-saml-ui`'s matrix) to
   build on GitHub's real runners on tag push instead.
-  **Known gap:** `app-icon.png` is generated at build time from
-  `IconFactory`'s runtime-drawn icon (good enough for Linux, which accepts
-  PNG directly), but Windows/macOS need real `.ico`/`.icns` files, which
-  this environment can't reliably produce (no ImageIO ICO/ICNS writer, no
-  Pillow/ImageMagick, no package manager to install one). Windows/macOS
-  builds currently fall back to jpackage's default icon — swap in real
-  designed assets at `src/packaging/app-icon.ico` / `app-icon.icns` and
-  uncomment the `--icon` flags in `build.yml` when they exist (see the TODO
-  comments there).
+  **Resolved (issue #2):** Windows/macOS need real `.ico`/`.icns` files
+  rather than the runtime-drawn `app-icon.png` Linux accepts directly. The
+  `festive_bardeen` container turned out to have `dnf` access after all
+  (confirmed while verifying issue #1's `.deb` build); `ImageMagick`
+  (`convert`) generates `src/packaging/app-icon.ico` as a proper
+  multi-resolution icon (256/128/64/48/32/16), and `libicns-utils`
+  (`png2icns`) generates `src/packaging/app-icon.icns` from 16/32/48/128/256
+  PNGs resized from the same 256×256 source — both committed, with the
+  `--icon` flags wired into `build.yml`'s `build-windows`/`build-macos`
+  jobs. Full end-to-end verification (that jpackage actually renders these
+  correctly into a Windows `.exe`/app-image or macOS `.dmg`) can only happen
+  on GitHub's real Windows/macOS runners at the next tagged release, since
+  `jpackage` doesn't cross-compile and this container is Linux-only.
 
 ## Post-M6 polish ("Claude's Choice")
 
