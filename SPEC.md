@@ -85,6 +85,7 @@ the real names from an actual PR's CI run first, then add them.
 | Steering | `~/.kiro/steering/*.md`     | `<ws>/.kiro/steering/*.md`        | Markdown + YAML front matter: `inclusion: always\|fileMatch\|manual\|auto`, `fileMatchPattern`, `name`/`description` (for `auto`). |
 | Skills   | `~/.kiro/skills/<name>/SKILL.md` | `<ws>/.kiro/skills/<name>/SKILL.md` | Folder per skill; `SKILL.md` (YAML front matter + instructions) is required, plus optional `scripts/`, `references/`, `assets/`. |
 | Hooks    | — (workspace only)          | `<ws>/.kiro/hooks/*.json`         | JSON: `name`, `trigger` (e.g. `PostFileSave`), `matcher`, `action{type,command\|prompt}`, `timeout`, `enabled`. |
+| Agents   | `~/.kiro/agents/*.json`     | `<ws>/.kiro/agents/*.json`        | JSON, one file per agent (filename minus `.json` is the identity by default): `name`, `description`, `prompt`, `mcpServers`, `tools`, `toolAliases`, `allowedTools`, `toolsSettings`, `resources`, `hooks`, `includeMcpJson`, `model`, `keyboardShortcut`, `welcomeMessage` — all optional. |
 | Usage    | n/a (no local file)         | n/a                                | Held — no viable local/API source; see Non-goals. |
 
 `KIRO_HOME` env var is honored to relocate the global `~/.kiro` root, matching
@@ -105,7 +106,17 @@ Kiro's own behavior.
    skill folder; delete.
 4. **Hooks panel** — workspace-only list; enable/disable toggle; form editor
    for trigger/matcher/action/timeout + raw-JSON fallback; create/delete.
-5. **Usage panel** — held (see Non-goals). Static note directing users to
+5. **Agents panel** (issue #13) — list per scope, one file per agent; form
+   editor for `description`/`prompt`/`model`/`keyboardShortcut`/
+   `welcomeMessage`/`tools`/`allowedTools`/`includeMcpJson` + raw-JSON
+   fallback for everything else the schema allows (`name`, `mcpServers`,
+   `toolAliases`, `toolsSettings`, `resources`, `hooks`) — same "form covers
+   the common case, raw JSON covers the rest, unmodeled fields round-trip
+   losslessly" philosophy as the MCP panel; create/delete. Purely config-file
+   CRUD, same as every other panel — never executes an agent or talks to a
+   model, consistent with the "does not talk to models or run agents"
+   non-goal above.
+6. **Usage panel** — held (see Non-goals). Static note directing users to
    `kiro-cli` → `/usage` instead of a broken or ToS-risky feature.
 
 ## Cross-cutting behavior
@@ -428,3 +439,55 @@ never do, so the two constructors need genuinely different `originalName`
 semantics, not just different initial field values.
 
 84 tests total.
+
+## Agents tab (issue #13)
+
+A missed, fundamental feature area: Kiro supports custom agents defined as
+JSON config files (`.kiro/agents/*.json` workspace, `~/.kiro/agents/*.json`
+global), directly analogous to MCP/Steering/Skills/Hooks. Confirmed via
+kiro.dev docs (not guessed) — the full schema has 13 optional fields
+(`name`, `description`, `prompt`, `mcpServers`, `tools`, `toolAliases`,
+`allowedTools`, `toolsSettings`, `resources`, `hooks`, `includeMcpJson`,
+`model`, `keyboardShortcut`, `welcomeMessage`).
+
+**File-per-item, not map-in-one-file.** Unlike `mcp.json`/hooks, each agent
+is its own file, with the filename (minus `.json`) as the identity by
+default. Architecturally this is closer to Steering's shape (flat
+file-per-item, `JList` not `JTable`) than MCP/Hooks' (a map/array inside one
+shared file) — `AgentService`/`AgentsPanel` mirror `SteeringService`/
+`SteeringPanel` closely. But the *editor dialog* mirrors `HookFormPanel`/
+`HookEditDialog`'s Form+Raw-JSON-tab split instead of `SteeringEditorDialog`'s
+plain-fields shape, since Agent's schema is real structured JSON (needs the
+Raw JSON escape hatch), not simple YAML front matter.
+
+**v1 scope**: Form tab covers 8 fields (`description`, `prompt`, `model`,
+`keyboardShortcut`, `welcomeMessage`, `tools`, `allowedTools`,
+`includeMcpJson`); the other 6 (including `name` itself) are
+Raw-JSON-tab-only, round-tripped losslessly via a Jackson `@JsonAnyGetter`/
+`@JsonAnySetter` catch-all on `AgentConfig` (same pattern as
+`McpServerConfig.extra`) so a Form-tab-only edit never destroys them. No
+`name` field in the Form tab at all — no file-per-item resource in this app
+supports rename (Steering/Skills don't either).
+
+**Identity fields vs. Jackson deserialization.** `AgentConfig` is fully
+Jackson-bound (unlike `SteeringDoc`, which isn't Jackson-bound at all —
+`FrontMatterParser` handles YAML manually). Its `filePath`/`workspaceRoot`
+identity fields are `@JsonIgnore`d and `final`, set via a constructor that
+accepts `null` for transient/scratch instances (e.g. built from the Raw
+JSON tab, never persisted directly). Real loads use
+`mapper.readerForUpdating(new AgentConfig(filePath, workspaceRoot))` rather
+than a no-arg constructor + Jackson-injected fields, so the identity fields
+stay genuinely `final` without fighting Jackson's usual instantiation path.
+
+**Verified end-to-end**, not just unit-tested, using the same
+invokeLater-not-invokeAndWait modal-dialog harness technique documented for
+the MCP catalog feature (`AgentEditDialog` and `JOptionPane.showInputDialog`
+for New... are both modal). A hand-crafted fixture with `mcpServers`/
+`toolAliases`/`hooks` populated confirmed those fields survive a real,
+Form-tab-only edit through the actual UI (not just `JsonMapperFactory`
+directly) — this was the single highest-risk piece of the design, given a
+near-identical class of bug (`McpServerConfig.isRemote()` missing
+`@JsonIgnore`) had already slipped past unit tests once in the MCP catalog
+feature.
+
+98 tests total.

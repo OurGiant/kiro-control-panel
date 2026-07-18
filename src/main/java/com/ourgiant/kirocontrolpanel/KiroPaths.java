@@ -33,6 +33,10 @@ public final class KiroPaths {
         return globalKiroHome().resolve("skills");
     }
 
+    public static Path globalAgentsDir() {
+        return globalKiroHome().resolve("agents");
+    }
+
     public static Path workspaceKiroDir(Path workspaceRoot) {
         return workspaceRoot.resolve(".kiro");
     }
@@ -47,6 +51,10 @@ public final class KiroPaths {
 
     public static Path workspaceSkillsDir(Path workspaceRoot) {
         return workspaceKiroDir(workspaceRoot).resolve("skills");
+    }
+
+    public static Path workspaceAgentsDir(Path workspaceRoot) {
+        return workspaceKiroDir(workspaceRoot).resolve("agents");
     }
 
     public static Path workspaceHooksDir(Path workspaceRoot) {

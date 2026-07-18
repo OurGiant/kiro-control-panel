@@ -1,5 +1,6 @@
 package com.ourgiant.kirocontrolpanel;
 
+import com.ourgiant.kirocontrolpanel.agents.AgentsPanel;
 import com.ourgiant.kirocontrolpanel.hooks.HooksPanel;
 import com.ourgiant.kirocontrolpanel.mcp.McpPanel;
 import com.ourgiant.kirocontrolpanel.skills.SkillsPanel;
@@ -37,6 +38,7 @@ public class MainWindow extends JFrame {
         tabs.addTab("Steering", new SteeringPanel(preferences, watcher));
         tabs.addTab("Skills", new SkillsPanel(preferences, watcher));
         tabs.addTab("Hooks", new HooksPanel(preferences, watcher));
+        tabs.addTab("Agents", new AgentsPanel(preferences, watcher));
         tabs.addTab("Usage", new UsagePanel());
         setContentPane(tabs);
 
