@@ -94,6 +94,10 @@ jobs:
             --vendor OurGiant \
             --type deb \
             --icon src/main/resources/app-icon.png \
+            --description "System-tray Swing app for managing Kiro's MCP servers, steering docs, skills, and hooks outside the IDE" \
+            --linux-menu-group "Development;Utility;" \
+            --linux-shortcut \
+            --resource-dir src/packaging/linux \
             --dest installer-output
 
       - name: Upload Linux artifacts
