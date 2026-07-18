@@ -112,7 +112,8 @@ com.ourgiant.kirocontrolpanel/
 ├── TrayApp.java              # main() + tray icon lifecycle, X11 popup-position fix
 ├── MainWindow.java           # JFrame, tabbed panels, File/Config/Help menus
 ├── FirstRunDialog.java       # one-time welcome dialog
-├── AboutDialog.java          # version display (Help > About)
+├── AboutDialog.java          # version + update-check display (Help > About)
+├── LogViewerDialog.java      # live-ish log tail (Help > View Logs...)
 ├── ThemeManager.java         # ported from aws-idp-saml-ui
 ├── AppPreferences.java       # recent workspaces, theme, window bounds, first-run flag
 ├── KiroPaths.java            # resolves ~/.kiro vs KIRO_HOME, workspace .kiro
@@ -125,8 +126,8 @@ com.ourgiant.kirocontrolpanel/
 ├── hooks/      Hook.java HookAction.java HookFile.java HookEntry.java HookService.java
 │               HookTableModel.java HookFormPanel.java HooksPanel.java HookEditDialog.java
 ├── usage/      UsagePanel.java   # static "held" note, see Non-goals
-└── util/       FrontMatterParser.java JsonMapperFactory.java AppVersion.java
-                WorkspaceScope[Bar|Registry].java RawJsonEditorDialog.java
+└── util/       FrontMatterParser.java JsonMapperFactory.java AppVersion.java LogPaths.java
+                UpdateChecker.java WorkspaceScope[Bar|Registry].java RawJsonEditorDialog.java
                 DirectoryWatcher.java DesktopUtils.java SwingLayoutUtils.java IconFactory.java
 ```
 
@@ -221,3 +222,30 @@ executed as Tier 1 (real gaps) and Tier 2 (worthwhile cleanup):
   `pom.xml` resource filtering ported from `aws-idp-saml-ui`.
 
 56 tests total (up from 33 at the end of M6).
+
+### Tier 3 — new features, evaluated separately
+
+Two genuinely new features (not bug fixes) considered alongside the
+polish above, plus one item deliberately skipped:
+
+- **Skipped**: `DirectoryWatcher` self-write suppression (our own saves
+  trigger a harmless redundant reload ~300ms later) — real complexity for
+  no visible benefit, left as-is by design.
+- **Log viewer** (`LogViewerDialog`, `LogPaths`, Help > View Logs...) —
+  non-modal, auto-refreshes on a timer while open (skips re-reading the
+  file if its size hasn't changed since the last tick), plus an "Open Log
+  Folder..." button reusing `DesktopUtils`. Correction to the original
+  Tier 3 writeup: this was *not* actually mirroring an `aws-idp-saml-ui`
+  feature as first claimed — verified via `grep` that no such log viewer
+  exists there; this is a fresh design specific to this app.
+- **Update check** (`UpdateChecker`, wired into `AboutDialog`) — genuinely
+  ported from `aws-idp-saml-ui`'s `SwingMain.fetchLatestRelease()`/
+  `isNewerVersion()`, polling `GET /repos/OurGiant/kiro-control-panel/releases/latest`.
+  Verified end-to-end on the host (real display, real network call): as
+  of this writing the repo has no tagged releases yet, so it correctly
+  falls back to "Could not check for updates" (confirmed via `gh api` that
+  the endpoint genuinely 404s) rather than crashing — will start reporting
+  real version comparisons once `build.yml`'s release job runs on a
+  `v*` tag.
+
+63 tests total (up from 56).

@@ -99,6 +99,12 @@ public class MainWindow extends JFrame {
         JMenu helpMenu = new JMenu("Help");
         helpMenu.setMnemonic(KeyEvent.VK_H);
 
+        JMenuItem viewLogsItem = new JMenuItem("View Logs...");
+        viewLogsItem.addActionListener(e -> new LogViewerDialog(this).setVisible(true));
+        helpMenu.add(viewLogsItem);
+
+        helpMenu.addSeparator();
+
         JMenuItem aboutItem = new JMenuItem("About");
         aboutItem.addActionListener(e -> new AboutDialog(this).setVisible(true));
         helpMenu.add(aboutItem);
