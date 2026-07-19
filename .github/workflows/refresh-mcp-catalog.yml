@@ -1,0 +1,55 @@
+name: Refresh MCP Catalog
+
+on:
+  schedule:
+    - cron: '0 13 * * 1'   # Monday 13:00 UTC
+  workflow_dispatch:
+
+jobs:
+  refresh-catalog:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Regenerate catalog
+        run: |
+          python3 tools/generate-mcp-catalog.py > /tmp/mcp-catalog.json.new
+          mv /tmp/mcp-catalog.json.new src/main/resources/mcp-catalog.json
+
+      - name: Check for catalog changes
+        id: diff
+        run: |
+          if git diff --quiet -- src/main/resources/mcp-catalog.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open PR with catalog changes
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore: refresh MCP catalog from kiro.dev"
+          branch: chore/refresh-mcp-catalog
+          delete-branch: true
+          title: "chore: refresh MCP catalog from kiro.dev"
+          body: |
+            Automated weekly regeneration of `src/main/resources/mcp-catalog.json`
+            via `tools/generate-mcp-catalog.py`.
+
+            Review carefully before merging — the generator scrapes an HTML page
+            kiro.dev controls, not a stable API. A page redesign could produce a
+            plausible-looking but wrong extraction that the script's own
+            "zero entries" exit-1 guard wouldn't catch (that guard only catches
+            total extraction failure, not a subtly-wrong partial one).
+          labels: enhancement
+          add-paths: src/main/resources/mcp-catalog.json
