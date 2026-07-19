@@ -29,6 +29,11 @@ public class TrayApp {
     private TrayIcon trayIcon;
 
     public static void main(String[] args) {
+        // Must be set before the first HttpClient/ProxySelector use (catalog refresh,
+        // update check): without it, java.net's default ProxySelector ignores the
+        // OS/registry proxy config entirely, which silently breaks outbound HTTPS on
+        // networks that require a system proxy (e.g. many managed Windows machines) -- see #35.
+        System.setProperty("java.net.useSystemProxies", "true");
         if (ProcessDetacher.relaunchDetached(args)) {
             return;
         }

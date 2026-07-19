@@ -13,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -62,6 +64,14 @@ public class SkillsPanel extends JPanel {
         skillList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 updateButtonState();
+            }
+        });
+        skillList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && skillList.getSelectedValue() != null) {
+                    onEdit();
+                }
             }
         });
         add(new JScrollPane(skillList), BorderLayout.CENTER);

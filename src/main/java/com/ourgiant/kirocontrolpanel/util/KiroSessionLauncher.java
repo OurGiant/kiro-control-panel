@@ -52,15 +52,24 @@ public final class KiroSessionLauncher {
         return Platform.UNSUPPORTED;
     }
 
-    /** No shell involved -- ProcessBuilder passes argv directly, so the directory needs no escaping. */
+    /** No shell involved on Linux -- ProcessBuilder passes argv directly, so the directory needs no escaping. */
     public static List<String> buildLinuxCommand(String directory) {
         return List.of(GNOME_TERMINAL_BINARY, "--working-directory=" + directory,
             "--", "bash", "-c", "kiro-cli; exec bash");
     }
 
+    /**
+     * "start" detaches pwsh into its own console with real console stdio (and
+     * respects the user's default terminal app on Win 11, e.g. Windows Terminal).
+     * Launching pwsh.exe directly wires its std handles to this JVM's pipes
+     * instead, leaving the new console window blank/unresponsive -- see #36.
+     * "Kiro Session" must be present: start treats the first quoted arg as the
+     * window title, and ProcessBuilder quotes it for us since it contains a space.
+     */
     public static List<String> buildWindowsCommand(String directory) {
         String script = "Set-Location -LiteralPath '" + escapePowerShellSingleQuoted(directory) + "'; kiro-cli";
-        return List.of(PWSH_BINARY, "-NoExit", "-Command", script);
+        return List.of("cmd.exe", "/c", "start", "Kiro Session",
+            PWSH_BINARY, "-NoExit", "-Command", script);
     }
 
     /** Two independent escaping layers: POSIX shell quoting, then AppleScript string-literal quoting of the result. */
@@ -166,9 +175,21 @@ public final class KiroSessionLauncher {
             if (finished && process.exitValue() != 0) {
                 String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8).trim();
                 logger.warn("osascript exited {} launching terminal: {}", process.exitValue(), stderr);
-                JOptionPane.showMessageDialog(parent,
-                    "Failed to launch Terminal: " + (stderr.isEmpty() ? "exit code " + process.exitValue() : stderr),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+                if (stderr.contains("-1743")) {
+                    // -1743: user denied (or has never granted) the one-time Automation
+                    // permission prompt to control Terminal.app via Apple events. macOS
+                    // never re-prompts after a denial, so the only way back is System
+                    // Settings -- see #37.
+                    JOptionPane.showMessageDialog(parent,
+                        "Kiro Control Panel isn't allowed to control Terminal.\n\n"
+                            + "Open System Settings → Privacy & Security → Automation, "
+                            + "find Kiro Control Panel, and enable Terminal.",
+                        "Permission Needed", JOptionPane.WARNING_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(parent,
+                        "Failed to launch Terminal: " + (stderr.isEmpty() ? "exit code " + process.exitValue() : stderr),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                }
             }
             // Otherwise: launched, or still pending (e.g. a one-time Automation permission
             // prompt) -- not treated as a failure either way.

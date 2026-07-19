@@ -109,7 +109,7 @@ class KiroSessionLauncherTest {
     void windowsCommandUsesLiteralPathAndEscapesEmbeddedQuote() {
         List<String> command = KiroSessionLauncher.buildWindowsCommand("C:\\O'Brien's Project");
 
-        assertEquals(List.of("pwsh.exe", "-NoExit",
+        assertEquals(List.of("cmd.exe", "/c", "start", "Kiro Session", "pwsh.exe", "-NoExit",
             "-Command", "Set-Location -LiteralPath 'C:\\O''Brien''s Project'; kiro-cli"), command);
     }
 
