@@ -722,14 +722,36 @@ intrinsic sizing rather than parent/child clipping.
 hand, occasionally. `.github/workflows/refresh-mcp-catalog.yml` (the
 second workflow file in this repo, alongside `build.yml`) runs
 `tools/generate-mcp-catalog.py` weekly (Monday 13:00 UTC — start of the
-work week, so a PR needing review doesn't sit ignored over a weekend,
-mid-morning across most timezones) and on `workflow_dispatch` for on-demand
-runs, opening a PR with the diff for human review if the output actually
-changed. Never auto-merges — the PR sits for review like every other
-change in this repo; branch protection (`enforce_admins: true`) would
-structurally block a direct-to-`main` push even if attempted.
+work week, mid-morning across most timezones) and on `workflow_dispatch`
+for on-demand runs.
 
-**Design choices worth recording:**
+**Deliberately stops short of opening a PR.** The first design used
+`peter-evans/create-pull-request`, but that needs the repo-wide "Allow
+GitHub Actions to create and approve pull requests" setting — confirmed
+off here via `gh api repos/OurGiant/kiro-control-panel/actions/permissions/workflow`
+→ `"can_approve_pull_request_reviews": false` — and left off *by choice*,
+not just inertia: that single toggle also grants the unrelated, more
+sensitive "approve PRs" capability (there's no narrower "create only"
+option), which is exactly the kind of review-bypass surface worth not
+opening just to save one manual step. Instead:
+1. Pushes the diff straight to a fixed branch, `chore/refresh-mcp-catalog`
+   (`git push --force` — this branch is disposable/always-regenerated, so
+   force-pushing to it every run is intentional, not a hazard). Needs only
+   `contents: write`, already an ordinary permission with no special gate.
+2. Opens a GitHub *issue* (not a PR) linking to the branch and the compare
+   view, with the exact `gh pr create` command to run — `issues: write` is
+   also an ordinary permission, entirely separate from the PR-creation
+   toggle. Guards against duplicate issues piling up across unattended
+   weeks by checking for an already-open `catalog-refresh`-labeled issue
+   first and skipping creation if one exists.
+
+Net effect: the tedious part (scrape, diff, stage a branch) is automated;
+opening and merging the actual PR stays a manual, human-initiated action
+every time — not because the tooling can't do it, but because doing it
+that way avoids needing the elevated permission at all, rather than
+needing it and trusting a workflow not to misuse it.
+
+**Other design choices worth recording:**
 - **Write to a temp path, then `mv`, never a direct `>` redirect to the
   destination.** A naive `python3 ... > src/main/resources/mcp-catalog.json`
   truncates the destination the instant it opens, before the script's exit
@@ -737,23 +759,10 @@ structurally block a direct-to-`main` push even if attempted.
   extracted" guard, that would already have zeroed out the previously-good
   file in the checkout before the step fails. Redirect-to-scratch-then-`mv`
   means a failing run leaves the checked-out file untouched and no
-  diff/PR step ever runs.
-- **`git diff --quiet` gate before the PR-open step**, even though
-  `peter-evans/create-pull-request` already has its own internal
-  no-changes skip — an explicit, greppable "no-op this week" log line is
-  worth the small redundancy rather than depending on remembering a
-  third-party action's internal semantics.
-- **Fixed branch name (`chore/refresh-mcp-catalog`), not date-suffixed.**
-  The action force-pushes to and reuses an existing branch's still-open
-  PR. A dated name would defeat that — if last week's PR is still
-  unreviewed, this week's run would open a second one instead of updating
-  the first, accumulating stale PRs weekly.
-- **`peter-evans/create-pull-request@v7`** over hand-rolled `git`/`gh`
-  commands — `build.yml` already trusts third-party actions by
-  major-version tag (`softprops/action-gh-release@v2`), so this isn't a
-  new trust category, and hand-rolling would mean re-implementing
-  branch-exists detection, force-push-vs-new-commit logic, and
-  PR-already-open detection that this action already solved.
+  branch-push/issue step ever runs.
+- **`git diff --quiet` gate before pushing/opening an issue** — an
+  explicit, greppable "no-op this week" log line when kiro.dev's list
+  hasn't changed, rather than pushing an empty no-op branch every week.
 - **`actions/setup-python` even though `ubuntu-latest` ships Python
   already and the script is stdlib-only.** The script uses PEP 604 union
   syntax (`dict | None`), needing 3.10+ — fine on current runners, but
@@ -762,18 +771,7 @@ structurally block a direct-to-`main` push even if attempted.
   insulates against a future image change silently breaking this months
   from now with no code change to explain why.
 
-**Blocking dependency, confirmed via `gh api`, not assumed:** the repo's
-"Allow GitHub Actions to create and approve pull requests" setting
-(`gh api repos/OurGiant/kiro-control-panel/actions/permissions/workflow`
-→ `"can_approve_pull_request_reviews": false`) is currently off. This
-blocks the PR-open step regardless of the workflow's own `permissions:`
-block — it's a separate, additional repo-level gate GitHub added
-specifically for workflow-driven PR automation. Merging this workflow
-file is safe either way (the diff-check steps run fine either way, and
-`if: steps.diff.outputs.changed == 'true'` means the PR-open step simply
-fails on a real run rather than silently no-opping) — but the toggle needs
-to be flipped, with explicit sign-off, before a scheduled or dispatched
-run can actually succeed at opening a PR. Companion issue #26 (the in-app
-Refresh button) has no dependency on this at all — it reads whatever's
-already on `main`, regardless of whether this workflow has ever
-successfully run.
+Companion issue #26 (the in-app Refresh button) has no dependency on any
+of this — it reads whatever's already on `main`, regardless of whether
+this workflow has ever run, or whether its branch's PR has been opened
+and merged yet.
