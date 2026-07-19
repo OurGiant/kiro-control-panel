@@ -49,7 +49,8 @@ public final class UpdateChecker {
             String version = tagName.startsWith("v") ? tagName.substring(1) : tagName;
             return Optional.of(new ReleaseInfo(version, htmlUrl));
         } catch (Exception e) {
-            logger.debug("Failed to fetch latest release from GitHub", e);
+            // WARN, not debug: root logger is INFO by default (logback.xml) -- see #35.
+            logger.warn("Failed to fetch latest release from GitHub", e);
             return Optional.empty();
         }
     }

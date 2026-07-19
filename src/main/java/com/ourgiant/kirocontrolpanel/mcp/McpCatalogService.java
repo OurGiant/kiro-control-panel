@@ -68,7 +68,10 @@ public class McpCatalogService {
                 return Optional.of(parseEntries(in));
             }
         } catch (Exception e) {
-            logger.debug("Failed to fetch MCP catalog from {}", url, e);
+            // WARN, not debug: root logger is INFO by default (logback.xml), so this is
+            // the only way a real cause (proxy, firewall, DNS, ...) ends up in app.log
+            // instead of being silently invisible -- see #35.
+            logger.warn("Failed to fetch MCP catalog from {}", url, e);
             return Optional.empty();
         }
     }

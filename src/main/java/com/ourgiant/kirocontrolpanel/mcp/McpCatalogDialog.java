@@ -129,7 +129,7 @@ public class McpCatalogDialog extends JDialog {
                 try {
                     result = get();
                 } catch (Exception e) {
-                    logger.debug("Catalog refresh failed", e);
+                    logger.warn("Catalog refresh failed", e);
                     statusLabel.setText("Could not refresh catalog");
                     statusLabel.setForeground(Color.GRAY);
                     return;
