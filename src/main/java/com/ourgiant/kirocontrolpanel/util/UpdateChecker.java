@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLHandshakeException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -26,10 +27,15 @@ public final class UpdateChecker {
     private UpdateChecker() {
     }
 
-    /** Does a real network call — run this off the EDT (e.g. from a SwingWorker). @return empty on any failure (offline, rate-limited, no releases yet, ...). */
+    /**
+     * Does a real network call — run this off the EDT (e.g. from a SwingWorker).
+     * @return empty on a generic failure (offline, rate-limited, no releases yet, ...)
+     * @throws NetworkFetchException on a TLS handshake failure specifically, with a
+     *     user-facing message (see #44).
+     */
     public static Optional<ReleaseInfo> fetchLatestRelease() {
         try {
-            HttpClient client = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+            HttpClient client = HttpClientFactory.create(CONNECT_TIMEOUT);
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(RELEASES_URL))
                 .header("Accept", "application/vnd.github+json")
@@ -48,6 +54,9 @@ public final class UpdateChecker {
             }
             String version = tagName.startsWith("v") ? tagName.substring(1) : tagName;
             return Optional.of(new ReleaseInfo(version, htmlUrl));
+        } catch (SSLHandshakeException e) {
+            logger.warn("TLS handshake failed fetching latest release from GitHub (possible TLS-inspecting proxy)", e);
+            throw new NetworkFetchException("Couldn't verify the secure connection (possible corporate network proxy)", e);
         } catch (Exception e) {
             // WARN, not debug: root logger is INFO by default (logback.xml) -- see #35.
             logger.warn("Failed to fetch latest release from GitHub", e);

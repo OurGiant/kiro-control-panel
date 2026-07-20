@@ -2,6 +2,7 @@ package com.ourgiant.kirocontrolpanel;
 
 import com.ourgiant.kirocontrolpanel.util.AppVersion;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
+import com.ourgiant.kirocontrolpanel.util.NetworkFetchException;
 import com.ourgiant.kirocontrolpanel.util.UpdateChecker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,8 +88,9 @@ public class AboutDialog extends JDialog {
                 try {
                     release = get();
                 } catch (Exception e) {
-                    logger.debug("Update check failed", e);
-                    updateLabel.setText("Could not check for updates");
+                    logger.warn("Update check failed", e);
+                    updateLabel.setText(e.getCause() instanceof NetworkFetchException nfe
+                        ? nfe.getMessage() : "Could not check for updates");
                     return;
                 }
                 if (release.isEmpty()) {

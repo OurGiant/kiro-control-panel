@@ -1,5 +1,6 @@
 package com.ourgiant.kirocontrolpanel.mcp;
 
+import com.ourgiant.kirocontrolpanel.util.NetworkFetchException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -130,7 +131,8 @@ public class McpCatalogDialog extends JDialog {
                     result = get();
                 } catch (Exception e) {
                     logger.warn("Catalog refresh failed", e);
-                    statusLabel.setText("Could not refresh catalog");
+                    statusLabel.setText(e.getCause() instanceof NetworkFetchException nfe
+                        ? nfe.getMessage() : "Could not refresh catalog");
                     statusLabel.setForeground(Color.GRAY);
                     return;
                 }
