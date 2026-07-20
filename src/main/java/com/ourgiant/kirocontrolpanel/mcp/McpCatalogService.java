@@ -2,10 +2,13 @@ package com.ourgiant.kirocontrolpanel.mcp;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ourgiant.kirocontrolpanel.util.HttpClientFactory;
 import com.ourgiant.kirocontrolpanel.util.JsonMapperFactory;
+import com.ourgiant.kirocontrolpanel.util.NetworkFetchException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLHandshakeException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -51,10 +54,16 @@ public class McpCatalogService {
         return cached;
     }
 
-    /** Does a real network call — run this off the EDT (e.g. from a SwingWorker). @return empty on any failure (offline, non-200, malformed JSON, ...). */
+    /**
+     * Does a real network call — run this off the EDT (e.g. from a SwingWorker).
+     * @return empty on a generic failure (offline, non-200, malformed JSON, ...)
+     * @throws NetworkFetchException on a TLS handshake failure specifically, with a
+     *     user-facing message (see #44) — deliberately not folded into the empty-Optional
+     *     case, since it's diagnosable and actionable in a way "offline" isn't.
+     */
     public Optional<List<McpCatalogEntry>> fetchFromUrl(String url) {
         try {
-            HttpClient client = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
+            HttpClient client = HttpClientFactory.create(CONNECT_TIMEOUT);
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .header("User-Agent", "kiro-control-panel")
@@ -67,6 +76,9 @@ public class McpCatalogService {
             try (InputStream in = response.body()) {
                 return Optional.of(parseEntries(in));
             }
+        } catch (SSLHandshakeException e) {
+            logger.warn("TLS handshake failed fetching MCP catalog from {} (possible TLS-inspecting proxy)", url, e);
+            throw new NetworkFetchException("Couldn't verify the secure connection (possible corporate network proxy)", e);
         } catch (Exception e) {
             // WARN, not debug: root logger is INFO by default (logback.xml), so this is
             // the only way a real cause (proxy, firewall, DNS, ...) ends up in app.log
