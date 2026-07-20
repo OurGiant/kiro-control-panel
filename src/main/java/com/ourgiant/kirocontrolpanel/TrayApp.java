@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.desktop.AppReopenedListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.IOException;
@@ -27,6 +28,7 @@ public class TrayApp {
     private final AppPreferences preferences = new AppPreferences();
     private MainWindow mainWindow;
     private TrayIcon trayIcon;
+    private boolean dockReopenSupported;
 
     public static void main(String[] args) {
         // Must be set before the first HttpClient/ProxySelector use (catalog refresh,
@@ -55,7 +57,7 @@ public class TrayApp {
         mainWindow.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                if (trayIcon != null) {
+                if (trayIcon != null || dockReopenSupported) {
                     mainWindow.persistWindowBounds();
                     mainWindow.setVisible(false);
                 } else {
@@ -64,6 +66,7 @@ public class TrayApp {
             }
         });
 
+        dockReopenSupported = installDockReopenHandler();
         initializeSystemTray();
         mainWindow.setVisible(true);
         syncWindowPositionWithWindowManager(mainWindow);
@@ -74,10 +77,30 @@ public class TrayApp {
         }
     }
 
+    /**
+     * The Dock icon reopen handler (fired when the user clicks the running app's Dock
+     * icon with no window open) is a macOS-only fallback for getting the main window
+     * back, independent of the system tray -- the tray icon can be unreliable or lost
+     * in a crowded menu bar, but the Dock icon is always present since we don't set
+     * LSUIElement. AppReopenedListener has no isSupported() query (addAppEventListener
+     * just silently no-ops on platforms that don't fire the event), so this is gated
+     * on OS detection directly rather than an AWT capability check. See #46.
+     */
+    private boolean installDockReopenHandler() {
+        if (KiroSessionLauncher.detect(System.getProperty("os.name")) != KiroSessionLauncher.Platform.MACOS
+                || !Desktop.isDesktopSupported()) {
+            return false;
+        }
+        AppReopenedListener listener = e -> restoreWindow();
+        Desktop.getDesktop().addAppEventListener(listener);
+        return true;
+    }
+
     private void initializeSystemTray() {
         if (!SystemTray.isSupported()) {
-            logger.info("System tray is not supported on this platform; window close will exit the app.");
-            mainWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            logger.info("System tray is not supported on this platform; window close will {}.",
+                dockReopenSupported ? "hide the window (Dock icon click reopens it)" : "exit the app");
+            mainWindow.setDefaultCloseOperation(dockReopenSupported ? JFrame.HIDE_ON_CLOSE : JFrame.EXIT_ON_CLOSE);
             return;
         }
 
@@ -86,7 +109,7 @@ public class TrayApp {
 
             PopupMenu trayMenu = new PopupMenu();
             MenuItem showItem = new MenuItem("Show");
-            showItem.addActionListener(e -> restoreFromTray());
+            showItem.addActionListener(e -> restoreWindow());
             MenuItem launchTerminalItem = new MenuItem("Launch kiro-cli...");
             // Tray menu has no "current scope" concept the way WorkspaceScopeBar does
             // (nothing is "selected" here), so this always launches in the home directory.
@@ -102,18 +125,19 @@ public class TrayApp {
 
             trayIcon = new TrayIcon(trayImage, TOOLTIP, trayMenu);
             trayIcon.setImageAutoSize(true);
-            trayIcon.addActionListener(e -> restoreFromTray());
+            trayIcon.addActionListener(e -> restoreWindow());
             SystemTray.getSystemTray().add(trayIcon);
 
             mainWindow.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         } catch (AWTException e) {
-            logger.warn("Failed to initialize system tray icon; window close will exit the app.", e);
+            logger.warn("Failed to initialize system tray icon; window close will {}.",
+                dockReopenSupported ? "hide the window (Dock icon click reopens it)" : "exit the app", e);
             trayIcon = null;
-            mainWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            mainWindow.setDefaultCloseOperation(dockReopenSupported ? JFrame.HIDE_ON_CLOSE : JFrame.EXIT_ON_CLOSE);
         }
     }
 
-    private void restoreFromTray() {
+    private void restoreWindow() {
         boolean wasVisible = mainWindow.isVisible();
         mainWindow.setVisible(true);
         mainWindow.setExtendedState(JFrame.NORMAL);
