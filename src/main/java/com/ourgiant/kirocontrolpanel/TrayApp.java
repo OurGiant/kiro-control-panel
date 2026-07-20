@@ -91,7 +91,8 @@ public class TrayApp {
             // Tray menu has no "current scope" concept the way WorkspaceScopeBar does
             // (nothing is "selected" here), so this always launches in the home directory.
             launchTerminalItem.addActionListener(e ->
-                KiroSessionLauncher.launchSession(mainWindow, Paths.get(System.getProperty("user.home"))));
+                KiroSessionLauncher.launchSession(mainWindow, Paths.get(System.getProperty("user.home")),
+                    preferences.isSkipPowerShellProfile()));
             MenuItem exitItem = new MenuItem("Exit");
             exitItem.addActionListener(e -> exitApplication());
             trayMenu.add(showItem);

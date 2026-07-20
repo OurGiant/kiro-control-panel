@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
@@ -65,11 +66,21 @@ public final class KiroSessionLauncher {
      * instead, leaving the new console window blank/unresponsive -- see #36.
      * "Kiro Session" must be present: start treats the first quoted arg as the
      * window title, and ProcessBuilder quotes it for us since it contains a space.
+     *
+     * @param skipProfile adds -NoProfile, skipping the user's $PROFILE. Off by default
+     *                    (see AppPreferences#isSkipPowerShellProfile) since a profile may
+     *                    set up PATH/env vars kiro-cli itself depends on -- see #42.
      */
-    public static List<String> buildWindowsCommand(String directory) {
+    public static List<String> buildWindowsCommand(String directory, boolean skipProfile) {
         String script = "Set-Location -LiteralPath '" + escapePowerShellSingleQuoted(directory) + "'; kiro-cli";
-        return List.of("cmd.exe", "/c", "start", "Kiro Session",
-            PWSH_BINARY, "-NoExit", "-Command", script);
+        List<String> command = new ArrayList<>(List.of("cmd.exe", "/c", "start", "Kiro Session",
+            PWSH_BINARY, "-NoExit"));
+        if (skipProfile) {
+            command.add("-NoProfile");
+        }
+        command.add("-Command");
+        command.add(script);
+        return command;
     }
 
     /** Two independent escaping layers: POSIX shell quoting, then AppleScript string-literal quoting of the result. */
@@ -110,7 +121,7 @@ public final class KiroSessionLauncher {
         return null;
     }
 
-    public static void launchSession(Component parent, Path workingDirectory) {
+    public static void launchSession(Component parent, Path workingDirectory, boolean skipWindowsProfile) {
         if (workingDirectory == null || !Files.isDirectory(workingDirectory)) {
             JOptionPane.showMessageDialog(parent,
                 "That location doesn't exist yet:\n" + workingDirectory, "Not Found", JOptionPane.WARNING_MESSAGE);
@@ -120,7 +131,7 @@ public final class KiroSessionLauncher {
         String directory = workingDirectory.toString();
         switch (detect(System.getProperty("os.name"))) {
             case LINUX -> launchLinux(parent, directory);
-            case WINDOWS -> launchWindows(parent, directory);
+            case WINDOWS -> launchWindows(parent, directory, skipWindowsProfile);
             case MACOS -> launchMac(parent, directory);
             case UNSUPPORTED -> JOptionPane.showMessageDialog(parent,
                 "Launching a terminal isn't supported on this platform.",
@@ -142,7 +153,7 @@ public final class KiroSessionLauncher {
         startFireAndForget(parent, buildLinuxCommand(directory));
     }
 
-    private static void launchWindows(Component parent, String directory) {
+    private static void launchWindows(Component parent, String directory, boolean skipProfile) {
         if (findOnPath(System.getenv("PATH"), PWSH_BINARY, File::canExecute) == null) {
             JOptionPane.showMessageDialog(parent,
                 "PowerShell 7 (pwsh) was not found on your PATH.\n"
@@ -151,7 +162,7 @@ public final class KiroSessionLauncher {
                 "Not Found", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        startFireAndForget(parent, buildWindowsCommand(directory));
+        startFireAndForget(parent, buildWindowsCommand(directory, skipProfile));
     }
 
     private static void startFireAndForget(Component parent, List<String> command) {

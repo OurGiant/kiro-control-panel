@@ -18,6 +18,7 @@ public class AppPreferences {
     private static final String KEY_WINDOW_WIDTH = "windowWidth";
     private static final String KEY_WINDOW_HEIGHT = "windowHeight";
     private static final String KEY_FIRST_RUN_COMPLETE = "firstRunComplete";
+    private static final String KEY_SKIP_POWERSHELL_PROFILE = "skipPowerShellProfile";
 
     private static final String WORKSPACE_DELIMITER = "\n";
     private static final String DEFAULT_THEME = "GitHub Dark";
@@ -86,5 +87,14 @@ public class AppPreferences {
 
     public void setFirstRunComplete(boolean complete) {
         prefs.putBoolean(KEY_FIRST_RUN_COMPLETE, complete);
+    }
+
+    /** Off by default: a user's $PROFILE may set PATH/env vars kiro-cli itself depends on. */
+    public boolean isSkipPowerShellProfile() {
+        return prefs.getBoolean(KEY_SKIP_POWERSHELL_PROFILE, false);
+    }
+
+    public void setSkipPowerShellProfile(boolean skip) {
+        prefs.putBoolean(KEY_SKIP_POWERSHELL_PROFILE, skip);
     }
 }

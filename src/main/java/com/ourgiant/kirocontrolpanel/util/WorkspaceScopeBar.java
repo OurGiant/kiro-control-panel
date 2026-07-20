@@ -189,6 +189,6 @@ public class WorkspaceScopeBar extends JPanel {
         Path dir = (scope == null || scope.isGlobal())
             ? Paths.get(System.getProperty("user.home"))
             : scope.workspaceRoot();
-        KiroSessionLauncher.launchSession(this, dir);
+        KiroSessionLauncher.launchSession(this, dir, preferences.isSkipPowerShellProfile());
     }
 }
