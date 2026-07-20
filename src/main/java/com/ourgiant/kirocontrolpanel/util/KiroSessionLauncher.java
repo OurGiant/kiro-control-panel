@@ -67,9 +67,10 @@ public final class KiroSessionLauncher {
      * "Kiro Session" must be present: start treats the first quoted arg as the
      * window title, and ProcessBuilder quotes it for us since it contains a space.
      *
-     * @param skipProfile adds -NoProfile, skipping the user's $PROFILE. Off by default
-     *                    (see AppPreferences#isSkipPowerShellProfile) since a profile may
-     *                    set up PATH/env vars kiro-cli itself depends on -- see #42.
+     * @param skipProfile adds -NoProfile, skipping the user's $PROFILE. On by default
+     *                    (see AppPreferences#isSkipPowerShellProfile) for launch speed;
+     *                    users whose profile sets up PATH/env vars kiro-cli depends on
+     *                    can uncheck it -- see #42.
      */
     public static List<String> buildWindowsCommand(String directory, boolean skipProfile) {
         String script = "Set-Location -LiteralPath '" + escapePowerShellSingleQuoted(directory) + "'; kiro-cli";

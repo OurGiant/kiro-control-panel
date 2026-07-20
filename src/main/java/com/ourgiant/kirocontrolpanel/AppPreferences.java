@@ -89,9 +89,12 @@ public class AppPreferences {
         prefs.putBoolean(KEY_FIRST_RUN_COMPLETE, complete);
     }
 
-    /** Off by default: a user's $PROFILE may set PATH/env vars kiro-cli itself depends on. */
+    /**
+     * On by default for launch speed; users whose $PROFILE sets up PATH/env vars kiro-cli
+     * depends on can uncheck it in Config.
+     */
     public boolean isSkipPowerShellProfile() {
-        return prefs.getBoolean(KEY_SKIP_POWERSHELL_PROFILE, false);
+        return prefs.getBoolean(KEY_SKIP_POWERSHELL_PROFILE, true);
     }
 
     public void setSkipPowerShellProfile(boolean skip) {
