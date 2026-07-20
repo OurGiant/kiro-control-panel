@@ -107,10 +107,18 @@ class KiroSessionLauncherTest {
 
     @Test
     void windowsCommandUsesLiteralPathAndEscapesEmbeddedQuote() {
-        List<String> command = KiroSessionLauncher.buildWindowsCommand("C:\\O'Brien's Project");
+        List<String> command = KiroSessionLauncher.buildWindowsCommand("C:\\O'Brien's Project", false);
 
         assertEquals(List.of("cmd.exe", "/c", "start", "Kiro Session", "pwsh.exe", "-NoExit",
             "-Command", "Set-Location -LiteralPath 'C:\\O''Brien''s Project'; kiro-cli"), command);
+    }
+
+    @Test
+    void windowsCommandAddsNoProfileWhenSkipProfileIsSet() {
+        List<String> command = KiroSessionLauncher.buildWindowsCommand("C:\\plain", true);
+
+        assertEquals(List.of("cmd.exe", "/c", "start", "Kiro Session", "pwsh.exe", "-NoExit", "-NoProfile",
+            "-Command", "Set-Location -LiteralPath 'C:\\plain'; kiro-cli"), command);
     }
 
     @Test

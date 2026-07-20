@@ -8,6 +8,7 @@ import com.ourgiant.kirocontrolpanel.steering.SteeringPanel;
 import com.ourgiant.kirocontrolpanel.usage.UsagePanel;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
+import com.ourgiant.kirocontrolpanel.util.KiroSessionLauncher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -105,6 +106,15 @@ public class MainWindow extends JFrame {
             themeMenu.add(item);
         }
         configMenu.add(themeMenu);
+
+        if (KiroSessionLauncher.detect(System.getProperty("os.name")) == KiroSessionLauncher.Platform.WINDOWS) {
+            configMenu.addSeparator();
+            JCheckBoxMenuItem skipProfileItem = new JCheckBoxMenuItem(
+                "Skip PowerShell Profile on Launch", preferences.isSkipPowerShellProfile());
+            skipProfileItem.addActionListener(e ->
+                preferences.setSkipPowerShellProfile(skipProfileItem.isSelected()));
+            configMenu.add(skipProfileItem);
+        }
 
         return configMenu;
     }
