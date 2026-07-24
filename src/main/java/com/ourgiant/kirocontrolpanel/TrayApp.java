@@ -155,11 +155,11 @@ public class TrayApp {
     }
 
     private void notifyGlobalKiroChanged() {
-        logger.info("Detected a change under the global .kiro folder");
+        logger.info("Detected a change under the global .kiro folder from outside this app");
         if (trayIcon != null) {
             trayIcon.displayMessage("Kiro configuration changed",
-                "Files under ~/.kiro (steering docs, skills, agents, or MCP servers) were modified. "
-                    + "If that wasn't you, take a look.",
+                "Files under ~/.kiro (steering docs, skills, agents, or MCP servers) changed outside "
+                    + "Kiro Control Panel. Worth a look if you weren't expecting it.",
                 TrayIcon.MessageType.INFO);
         }
     }

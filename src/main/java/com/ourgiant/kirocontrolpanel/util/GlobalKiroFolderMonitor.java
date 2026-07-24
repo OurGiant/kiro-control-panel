@@ -30,10 +30,10 @@ import java.util.stream.Stream;
  * including subdirectories created after startup (e.g. a new skill folder) --
  * which {@code DirectoryWatcher}'s callers never needed.
  * <p>
- * Note this fires for a change made through Kiro Control Panel's own Global-scope
- * "Save" actions too, same as any other write to this tree -- there's no
- * signal available to distinguish "this app just wrote it" from "something
- * else wrote it".
+ * A change to a path recently written by this app itself (per {@link SelfWriteTracker})
+ * is not treated as notification-worthy -- otherwise every routine Global-scope
+ * "Save" through the app's own UI would trigger the same alert as an unexpected
+ * external change, and the signal would get tuned out fast.
  */
 public final class GlobalKiroFolderMonitor {
     private static final Logger logger = LoggerFactory.getLogger(GlobalKiroFolderMonitor.class);
@@ -89,16 +89,24 @@ public final class GlobalKiroFolderMonitor {
             // call, or changes inside it (e.g. a brand-new skill folder's SKILL.md) would go
             // unnoticed.
             Path dir = (Path) key.watchable();
+            boolean notificationWorthy = false;
             for (WatchEvent<?> event : key.pollEvents()) {
-                if (event.kind() == StandardWatchEventKinds.ENTRY_CREATE) {
-                    Path created = dir.resolve((Path) event.context());
-                    if (Files.isDirectory(created)) {
-                        registerQuietly(created);
-                    }
+                if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
+                    notificationWorthy = true;
+                    continue;
+                }
+                Path changed = dir.resolve((Path) event.context());
+                if (event.kind() == StandardWatchEventKinds.ENTRY_CREATE && Files.isDirectory(changed)) {
+                    registerQuietly(changed);
+                }
+                if (!SelfWriteTracker.wasRecentlyWrittenByThisApp(changed)) {
+                    notificationWorthy = true;
                 }
             }
             key.reset();
-            SwingUtilities.invokeLater(debounceTimer::restart);
+            if (notificationWorthy) {
+                SwingUtilities.invokeLater(debounceTimer::restart);
+            }
         }
     }
 }

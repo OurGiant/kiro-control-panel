@@ -2,6 +2,7 @@ package com.ourgiant.kirocontrolpanel.steering;
 
 import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.util.FrontMatterParser;
+import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,6 +89,7 @@ public class SteeringService {
         }
 
         String content = FrontMatterParser.serialize(frontMatter, doc.getBody());
+        SelfWriteTracker.markAboutToWrite(filePath);
         Files.writeString(filePath, content, StandardCharsets.UTF_8);
         logger.info("Saved steering doc {}", filePath);
     }

@@ -82,6 +82,7 @@ public class RawJsonEditorDialog extends JDialog {
         }
         try {
             Files.createDirectories(filePath.getParent());
+            SelfWriteTracker.markAboutToWrite(filePath);
             Files.writeString(filePath, content);
             logger.info("Saved raw JSON {}", filePath);
             saved = true;
