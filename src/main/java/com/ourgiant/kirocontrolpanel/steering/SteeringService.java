@@ -2,6 +2,7 @@ package com.ourgiant.kirocontrolpanel.steering;
 
 import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.util.FrontMatterParser;
+import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,6 +93,7 @@ public class SteeringService {
         SelfWriteTracker.markAboutToWrite(filePath);
         Files.writeString(filePath, content, StandardCharsets.UTF_8);
         logger.info("Saved steering doc {}", filePath);
+        GitAutoCommitter.commitIfEnabled(filePath);
     }
 
     public void delete(SteeringDoc doc) throws IOException {

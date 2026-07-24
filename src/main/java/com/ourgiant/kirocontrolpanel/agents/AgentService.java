@@ -3,6 +3,7 @@ package com.ourgiant.kirocontrolpanel.agents;
 import com.fasterxml.jackson.core.PrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
+import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.JsonMapperFactory;
 import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
 import org.slf4j.Logger;
@@ -65,6 +66,7 @@ public class AgentService {
         SelfWriteTracker.markAboutToWrite(filePath);
         mapper.writer(prettyPrinter).writeValue(filePath.toFile(), config);
         logger.info("Saved agent config {}", filePath);
+        GitAutoCommitter.commitIfEnabled(filePath);
     }
 
     public void delete(AgentConfig config) throws IOException {
