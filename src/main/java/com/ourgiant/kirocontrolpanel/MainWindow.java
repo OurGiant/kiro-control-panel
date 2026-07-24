@@ -13,6 +13,7 @@ import javax.swing.*;
 import java.awt.Dimension;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.util.function.Consumer;
 
 /**
  * Main tabbed window. Normally hidden behind the tray icon; TrayApp owns the
@@ -23,6 +24,7 @@ public class MainWindow extends JFrame {
 
     private final AppPreferences preferences;
     private Runnable quitHandler = () -> System.exit(0);
+    private Consumer<Boolean> alertsPauseHandler = paused -> { };
 
     public MainWindow(AppPreferences preferences, DirectoryWatcher watcher) {
         super("Kiro Control Panel");
@@ -77,6 +79,16 @@ public class MainWindow extends JFrame {
 
         fileMenu.addSeparator();
 
+        // Session-only, deliberately not persisted to AppPreferences: for "I know a Kiro
+        // session is about to touch these files, don't interrupt me for a while" without
+        // having to remember to flip a permanent setting back afterward. The permanent
+        // on/off toggle lives in Settings instead. See #66.
+        JCheckBoxMenuItem pauseAlertsItem = new JCheckBoxMenuItem("Pause Change Alerts");
+        pauseAlertsItem.addActionListener(e -> alertsPauseHandler.accept(pauseAlertsItem.isSelected()));
+        fileMenu.add(pauseAlertsItem);
+
+        fileMenu.addSeparator();
+
         JMenuItem quitItem = new JMenuItem("Quit");
         quitItem.setMnemonic(KeyEvent.VK_Q);
         quitItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Q, InputEvent.CTRL_DOWN_MASK));
@@ -106,6 +118,11 @@ public class MainWindow extends JFrame {
     /** TrayApp wires this to its own exit logic (tray icon cleanup, System.exit). */
     public void setQuitHandler(Runnable quitHandler) {
         this.quitHandler = quitHandler;
+    }
+
+    /** TrayApp wires this to gate its external-change notification on the pause state. */
+    public void setAlertsPauseHandler(Consumer<Boolean> alertsPauseHandler) {
+        this.alertsPauseHandler = alertsPauseHandler;
     }
 
     public void persistWindowBounds() {

@@ -27,6 +27,8 @@ public class SettingsDialog extends JDialog {
 
         content.add(buildThemeSection(preferences));
         content.add(Box.createVerticalStrut(12));
+        content.add(buildChangeAlertsSection(preferences));
+        content.add(Box.createVerticalStrut(12));
         content.add(buildGitSection(preferences));
 
         if (KiroSessionLauncher.detect(System.getProperty("os.name")) == KiroSessionLauncher.Platform.WINDOWS) {
@@ -70,6 +72,22 @@ public class SettingsDialog extends JDialog {
         });
         row.add(themeCombo);
         section.add(row);
+        return section;
+    }
+
+    private JPanel buildChangeAlertsSection(AppPreferences preferences) {
+        JPanel section = titledSection("Change Alerts");
+        JCheckBox alertsCheckbox = new JCheckBox(
+            "Alert when ~/.kiro changes outside Kiro Control Panel", preferences.isFolderMonitorAlertsEnabled());
+        alertsCheckbox.setAlignmentX(Component.LEFT_ALIGNMENT);
+        alertsCheckbox.addActionListener(e ->
+            preferences.setFolderMonitorAlertsEnabled(alertsCheckbox.isSelected()));
+        section.add(alertsCheckbox);
+        JLabel hint = new JLabel("For a one-off, use File > Pause Change Alerts instead.");
+        hint.setAlignmentX(Component.LEFT_ALIGNMENT);
+        hint.setFont(hint.getFont().deriveFont(hint.getFont().getSize2D() - 1f));
+        hint.setForeground(Color.GRAY);
+        section.add(hint);
         return section;
     }
 
