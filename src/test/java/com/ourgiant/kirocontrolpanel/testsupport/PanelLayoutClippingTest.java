@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
  * clipped at a narrow window width, shipped in 1.1.0): every JPanel-rooted
  * component MainWindow can show, checked for clipped children at both the
  * app's real default size and a deliberately narrow one. Deliberately
- * excludes the 11 JDialog/JFrame classes -- Window construction itself is
+ * excludes the 12 JDialog/JFrame classes -- Window construction itself is
  * what's blocked headlessly in this project's CI, not layout computation;
  * those stay covered only by the manual verify/verify-java-swing process.
  * <p>

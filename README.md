@@ -69,7 +69,8 @@ project's workspace-scoped resources (`<workspace>/.kiro/...`), pin it via
 ```
 src/main/java/com/ourgiant/kirocontrolpanel/
 ├── TrayApp.java              # main() + tray icon lifecycle
-├── MainWindow.java           # JFrame, tabbed panels, File/Config menus
+├── MainWindow.java           # JFrame, tabbed panels, File/Help menus
+├── SettingsDialog.java       # theme, git tracking, and Windows-only prefs (File > Settings...)
 ├── ThemeManager.java         # FlatLaf theme switching
 ├── AppPreferences.java       # recent workspaces, theme, window bounds
 ├── KiroPaths.java            # resolves ~/.kiro vs KIRO_HOME, workspace .kiro

@@ -152,7 +152,7 @@ class GlobalKiroFolderMonitorTest {
     void neverReportsGitInternalDirectoryCreatedAfterStartup() throws IOException, InterruptedException {
         // Covers the other code path from the test above: .git doesn't exist yet when the
         // monitor starts (typical case -- git tracking is opt-in) and gets created later,
-        // e.g. the first time a user enables it via the Config menu.
+        // e.g. the first time a user enables it via File > Settings...
         CountDownLatch latch = new CountDownLatch(1);
         new GlobalKiroFolderMonitor(tempDir, latch::countDown);
 

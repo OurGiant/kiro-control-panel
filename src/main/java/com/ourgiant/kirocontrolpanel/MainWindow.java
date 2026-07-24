@@ -7,15 +7,10 @@ import com.ourgiant.kirocontrolpanel.skills.SkillsPanel;
 import com.ourgiant.kirocontrolpanel.steering.SteeringPanel;
 import com.ourgiant.kirocontrolpanel.usage.UsagePanel;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
-import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
-import com.ourgiant.kirocontrolpanel.util.KiroSessionLauncher;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.Dimension;
-import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 
@@ -24,7 +19,6 @@ import java.awt.event.KeyEvent;
  * show/hide/exit lifecycle.
  */
 public class MainWindow extends JFrame {
-    private static final Logger logger = LoggerFactory.getLogger(MainWindow.class);
     private static final Dimension MINIMUM_SIZE = new Dimension(640, 480);
 
     private final AppPreferences preferences;
@@ -68,7 +62,6 @@ public class MainWindow extends JFrame {
     private JMenuBar createMenuBar() {
         JMenuBar menuBar = new JMenuBar();
         menuBar.add(createFileMenu());
-        menuBar.add(createConfigMenu());
         menuBar.add(createHelpMenu());
         return menuBar;
     }
@@ -77,6 +70,13 @@ public class MainWindow extends JFrame {
         JMenu fileMenu = new JMenu("File");
         fileMenu.setMnemonic(KeyEvent.VK_F);
 
+        JMenuItem settingsItem = new JMenuItem("Settings...");
+        settingsItem.setMnemonic(KeyEvent.VK_S);
+        settingsItem.addActionListener(e -> new SettingsDialog(this, preferences).setVisible(true));
+        fileMenu.add(settingsItem);
+
+        fileMenu.addSeparator();
+
         JMenuItem quitItem = new JMenuItem("Quit");
         quitItem.setMnemonic(KeyEvent.VK_Q);
         quitItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Q, InputEvent.CTRL_DOWN_MASK));
@@ -84,64 +84,6 @@ public class MainWindow extends JFrame {
         fileMenu.add(quitItem);
 
         return fileMenu;
-    }
-
-    private JMenu createConfigMenu() {
-        JMenu configMenu = new JMenu("Config");
-        configMenu.setMnemonic(KeyEvent.VK_C);
-
-        JMenu themeMenu = new JMenu("Theme");
-        ButtonGroup themeGroup = new ButtonGroup();
-        String currentTheme = preferences.getTheme();
-        for (String themeName : ThemeManager.getAvailableThemeNames()) {
-            JRadioButtonMenuItem item = new JRadioButtonMenuItem(themeName, themeName.equals(currentTheme));
-            ActionListener listener = e -> {
-                if (ThemeManager.applyTheme(themeName)) {
-                    preferences.setTheme(themeName);
-                } else {
-                    logger.warn("Failed to apply theme {}", themeName);
-                }
-            };
-            item.addActionListener(listener);
-            themeGroup.add(item);
-            themeMenu.add(item);
-        }
-        configMenu.add(themeMenu);
-
-        if (KiroSessionLauncher.detect(System.getProperty("os.name")) == KiroSessionLauncher.Platform.WINDOWS) {
-            configMenu.addSeparator();
-            JCheckBoxMenuItem skipProfileItem = new JCheckBoxMenuItem(
-                "Skip PowerShell Profile on Launch", preferences.isSkipPowerShellProfile());
-            skipProfileItem.addActionListener(e ->
-                preferences.setSkipPowerShellProfile(skipProfileItem.isSelected()));
-            configMenu.add(skipProfileItem);
-        }
-
-        configMenu.addSeparator();
-        JCheckBoxMenuItem gitTrackingItem = new JCheckBoxMenuItem(
-            "Track ~/.kiro Changes with Git", preferences.isGitTrackingEnabled());
-        gitTrackingItem.addActionListener(e -> {
-            if (gitTrackingItem.isSelected()) {
-                if (!GitAutoCommitter.isGitAvailable()) {
-                    JOptionPane.showMessageDialog(this,
-                        "git was not found on your PATH. Install it to use this feature.",
-                        "Git Not Found", JOptionPane.WARNING_MESSAGE);
-                    gitTrackingItem.setSelected(false);
-                    return;
-                }
-                if (!GitAutoCommitter.ensureRepoInitialized(KiroPaths.globalKiroHome())) {
-                    JOptionPane.showMessageDialog(this,
-                        "Could not set up a git repository in ~/.kiro. Check the logs for details.",
-                        "Setup Failed", JOptionPane.WARNING_MESSAGE);
-                    gitTrackingItem.setSelected(false);
-                    return;
-                }
-            }
-            preferences.setGitTrackingEnabled(gitTrackingItem.isSelected());
-        });
-        configMenu.add(gitTrackingItem);
-
-        return configMenu;
     }
 
     private JMenu createHelpMenu() {
