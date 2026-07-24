@@ -103,6 +103,48 @@ class GlobalKiroFolderMonitorTest {
     }
 
     @Test
+    @Timeout(30)
+    void neverReportsChangesUnderGitInternalDirectoryPresentAtStartup() throws IOException, InterruptedException {
+        // Regression test for #60: GitAutoCommitter (#49) writes several files under .git/
+        // per commit (index, COMMIT_EDITMSG, logs/HEAD, refs/, objects/...) that
+        // SelfWriteTracker was never asked to track -- .git must be excluded from
+        // monitoring entirely, not left to suppression to cover every file git might touch.
+        Path gitDir = Files.createDirectory(tempDir.resolve(".git"));
+        CountDownLatch latch = new CountDownLatch(1);
+        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+
+        Files.writeString(gitDir.resolve("index"), "not actually git's binary format, doesn't matter for this test");
+        Path nestedRefs = Files.createDirectories(gitDir.resolve("refs").resolve("heads"));
+        Files.writeString(nestedRefs.resolve("main"), "abc123");
+
+        assertFalse(latch.await(5, TimeUnit.SECONDS), "callback should never fire for changes under .git");
+
+        Files.writeString(tempDir.resolve("mcp.json"), "{}");
+        assertTrue(latch.await(20, TimeUnit.SECONDS),
+            "callback should still fire for an unrelated change outside .git");
+    }
+
+    @Test
+    @Timeout(30)
+    void neverReportsGitInternalDirectoryCreatedAfterStartup() throws IOException, InterruptedException {
+        // Covers the other code path from the test above: .git doesn't exist yet when the
+        // monitor starts (typical case -- git tracking is opt-in) and gets created later,
+        // e.g. the first time a user enables it via the Config menu.
+        CountDownLatch latch = new CountDownLatch(1);
+        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+
+        Path gitDir = Files.createDirectory(tempDir.resolve(".git"));
+        Files.writeString(gitDir.resolve("index"), "not actually git's binary format, doesn't matter for this test");
+
+        assertFalse(latch.await(5, TimeUnit.SECONDS),
+            "creating .git itself should not fire a callback, nor should writes inside it afterward");
+
+        Files.writeString(tempDir.resolve("mcp.json"), "{}");
+        assertTrue(latch.await(20, TimeUnit.SECONDS),
+            "callback should still fire for an unrelated change outside .git");
+    }
+
+    @Test
     void nonExistentRootDoesNotThrow() throws IOException {
         new GlobalKiroFolderMonitor(tempDir.resolve("does-not-exist"), () -> { });
         // No exception means the no-op registration path was taken correctly.
