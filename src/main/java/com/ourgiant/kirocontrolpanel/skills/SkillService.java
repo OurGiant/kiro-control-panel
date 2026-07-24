@@ -75,6 +75,9 @@ public class SkillService {
     }
 
     public void save(Skill skill) throws IOException {
+        // Mark the skill's own directory before creating it: every skill lives in its own
+        // directory, so this is a real ENTRY_CREATE event on every new skill, not an edge case.
+        SelfWriteTracker.markAboutToWrite(skill.getSkillDir());
         Files.createDirectories(skill.getSkillDir());
 
         Map<String, Object> frontMatter = new LinkedHashMap<>();

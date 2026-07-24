@@ -53,6 +53,7 @@ public class McpConfigService {
     }
 
     public void save(Path path, McpConfigFile config) throws IOException {
+        SelfWriteTracker.markAboutToWrite(path.getParent());
         Files.createDirectories(path.getParent());
         SelfWriteTracker.markAboutToWrite(path);
         mapper.writer(prettyPrinter).writeValue(path.toFile(), config);
