@@ -85,6 +85,7 @@ public class RawJsonEditorDialog extends JDialog {
             SelfWriteTracker.markAboutToWrite(filePath);
             Files.writeString(filePath, content);
             logger.info("Saved raw JSON {}", filePath);
+            GitAutoCommitter.commitIfEnabled(filePath);
             saved = true;
             setVisible(false);
         } catch (IOException ex) {

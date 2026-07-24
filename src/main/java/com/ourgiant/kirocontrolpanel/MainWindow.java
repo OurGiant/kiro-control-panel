@@ -7,6 +7,7 @@ import com.ourgiant.kirocontrolpanel.skills.SkillsPanel;
 import com.ourgiant.kirocontrolpanel.steering.SteeringPanel;
 import com.ourgiant.kirocontrolpanel.usage.UsagePanel;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
+import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
 import com.ourgiant.kirocontrolpanel.util.KiroSessionLauncher;
 import org.slf4j.Logger;
@@ -115,6 +116,30 @@ public class MainWindow extends JFrame {
                 preferences.setSkipPowerShellProfile(skipProfileItem.isSelected()));
             configMenu.add(skipProfileItem);
         }
+
+        configMenu.addSeparator();
+        JCheckBoxMenuItem gitTrackingItem = new JCheckBoxMenuItem(
+            "Track ~/.kiro Changes with Git", preferences.isGitTrackingEnabled());
+        gitTrackingItem.addActionListener(e -> {
+            if (gitTrackingItem.isSelected()) {
+                if (!GitAutoCommitter.isGitAvailable()) {
+                    JOptionPane.showMessageDialog(this,
+                        "git was not found on your PATH. Install it to use this feature.",
+                        "Git Not Found", JOptionPane.WARNING_MESSAGE);
+                    gitTrackingItem.setSelected(false);
+                    return;
+                }
+                if (!GitAutoCommitter.ensureRepoInitialized(KiroPaths.globalKiroHome())) {
+                    JOptionPane.showMessageDialog(this,
+                        "Could not set up a git repository in ~/.kiro. Check the logs for details.",
+                        "Setup Failed", JOptionPane.WARNING_MESSAGE);
+                    gitTrackingItem.setSelected(false);
+                    return;
+                }
+            }
+            preferences.setGitTrackingEnabled(gitTrackingItem.isSelected());
+        });
+        configMenu.add(gitTrackingItem);
 
         return configMenu;
     }

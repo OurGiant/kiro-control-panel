@@ -3,6 +3,7 @@ package com.ourgiant.kirocontrolpanel.mcp;
 import com.fasterxml.jackson.core.PrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
+import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.JsonMapperFactory;
 import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
 import org.slf4j.Logger;
@@ -56,5 +57,6 @@ public class McpConfigService {
         SelfWriteTracker.markAboutToWrite(path);
         mapper.writer(prettyPrinter).writeValue(path.toFile(), config);
         logger.info("Saved MCP config {}", path);
+        GitAutoCommitter.commitIfEnabled(path);
     }
 }

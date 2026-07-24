@@ -2,6 +2,7 @@ package com.ourgiant.kirocontrolpanel.skills;
 
 import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.util.FrontMatterParser;
+import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,6 +86,7 @@ public class SkillService {
         SelfWriteTracker.markAboutToWrite(skill.getSkillMdPath());
         Files.writeString(skill.getSkillMdPath(), content, StandardCharsets.UTF_8);
         logger.info("Saved skill {}", skill.getSkillMdPath());
+        GitAutoCommitter.commitIfEnabled(skill.getSkillMdPath());
     }
 
     public void delete(Skill skill) throws IOException {
