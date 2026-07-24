@@ -1,6 +1,7 @@
 package com.ourgiant.kirocontrolpanel;
 
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
+import com.ourgiant.kirocontrolpanel.util.GlobalKiroFolderMonitor;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
 import com.ourgiant.kirocontrolpanel.util.KiroSessionLauncher;
 import com.ourgiant.kirocontrolpanel.util.ProcessDetacher;
@@ -68,6 +69,7 @@ public class TrayApp {
 
         dockReopenSupported = installDockReopenHandler();
         initializeSystemTray();
+        startGlobalKiroFolderMonitor();
         mainWindow.setVisible(true);
         syncWindowPositionWithWindowManager(mainWindow);
 
@@ -134,6 +136,31 @@ public class TrayApp {
                 dockReopenSupported ? "hide the window (Dock icon click reopens it)" : "exit the app", e);
             trayIcon = null;
             mainWindow.setDefaultCloseOperation(dockReopenSupported ? JFrame.HIDE_ON_CLOSE : JFrame.EXIT_ON_CLOSE);
+        }
+    }
+
+    /**
+     * Kiro reads everything under the global ~/.kiro tree (steering docs, skills, agents,
+     * mcp.json) as instructions, and there are documented cases of adversaries poisoning
+     * that content with malicious instructions -- so surface a heads-up when it changes,
+     * even though most changes here are entirely legitimate (Kiro IDE itself, or this
+     * app's own Global-scope saves). See #50.
+     */
+    private void startGlobalKiroFolderMonitor() {
+        try {
+            new GlobalKiroFolderMonitor(KiroPaths.globalKiroHome(), this::notifyGlobalKiroChanged);
+        } catch (IOException e) {
+            logger.warn("Failed to start global .kiro folder monitor", e);
+        }
+    }
+
+    private void notifyGlobalKiroChanged() {
+        logger.info("Detected a change under the global .kiro folder");
+        if (trayIcon != null) {
+            trayIcon.displayMessage("Kiro configuration changed",
+                "Files under ~/.kiro (steering docs, skills, agents, or MCP servers) were modified. "
+                    + "If that wasn't you, take a look.",
+                TrayIcon.MessageType.INFO);
         }
     }
 
