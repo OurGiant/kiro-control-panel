@@ -3,6 +3,8 @@ package com.ourgiant.kirocontrolpanel.util;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -189,5 +191,25 @@ class GlobalKiroFolderMonitorTest {
         // Give the debounce window a chance to have coalesced the burst before asserting.
         Thread.sleep(1500);
         assertTrue(callCount.get() <= 2, "expected the 1s debounce to coalesce 5 rapid writes into ~1 callback, got " + callCount.get());
+    }
+
+    @ParameterizedTest(name = "ignores editor artifact: {0}")
+    @ValueSource(strings = {
+        ".conventions.md.swp", ".conventions.md.swo", "4913", "#conventions.md#", ".#conventions.md", "conventions.md~"
+    })
+    @Timeout(30)
+    void ignoresKnownEditorArtifactFiles(String artifactName) throws IOException, InterruptedException {
+        // Regression test for #62: editing a file externally (e.g. in vim) produces several
+        // of these transient bookkeeping files around the real save, none of which are
+        // actual content changes worth alerting on.
+        CountDownLatch latch = new CountDownLatch(1);
+        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+
+        Files.writeString(tempDir.resolve(artifactName), "transient editor content");
+
+        assertFalse(latch.await(5, TimeUnit.SECONDS), "callback should not fire for editor artifact " + artifactName);
+
+        Files.writeString(tempDir.resolve("mcp.json"), "{}");
+        assertTrue(latch.await(20, TimeUnit.SECONDS), "callback should still fire for an unrelated real change");
     }
 }

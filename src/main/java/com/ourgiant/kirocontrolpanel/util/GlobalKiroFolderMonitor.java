@@ -17,6 +17,7 @@ import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.regex.Pattern;
 
 /**
  * Watches the global {@code ~/.kiro} folder tree (steering docs, skills,
@@ -43,11 +44,24 @@ import java.nio.file.attribute.BasicFileAttributes;
  * {@link SelfWriteTracker} was never asked to track, since it only marks the one file the
  * app actually saved. It's the auto-commit feature's own plumbing, not Kiro configuration
  * content -- Kiro itself never reads it, so there's nothing here worth alerting on. See #60.
+ * <p>
+ * Well-known editor transient files (vim swap files, its writability-check {@code 4913}
+ * file, emacs autosave/lock files, {@code ~} backup files) are ignored outright, not just
+ * suppressed -- they're never real content, so editing a file externally (e.g. in vim)
+ * doesn't produce a burst of one alert per swap-file-create/write/rename/swap-file-delete
+ * step. See #62.
  */
 public final class GlobalKiroFolderMonitor {
     private static final Logger logger = LoggerFactory.getLogger(GlobalKiroFolderMonitor.class);
     private static final int DEBOUNCE_MILLIS = 1000;
     private static final String GIT_INTERNAL_DIR_NAME = ".git";
+    private static final Pattern EDITOR_ARTIFACT_PATTERN = Pattern.compile(
+        "^\\..*\\.sw[a-z]$"    // vim swap file, e.g. .SKILL.md.swp
+            + "|^4913$"         // vim's writability-check temp file
+            + "|^#.*#$"         // emacs autosave file
+            + "|^\\.#.*"        // emacs lock file (a symlink, not a real file)
+            + "|.*~$"           // vim/emacs backup file
+    );
 
     private final WatchService watchService;
     private final Timer debounceTimer;
@@ -87,6 +101,10 @@ public final class GlobalKiroFolderMonitor {
         return GIT_INTERNAL_DIR_NAME.equals(String.valueOf(path.getFileName()));
     }
 
+    private static boolean isEditorArtifact(Path path) {
+        return EDITOR_ARTIFACT_PATTERN.matcher(String.valueOf(path.getFileName())).matches();
+    }
+
     private void registerQuietly(Path dir) {
         try {
             dir.register(watchService,
@@ -122,6 +140,10 @@ public final class GlobalKiroFolderMonitor {
                 if (isGitInternal(changed)) {
                     // GitAutoCommitter's own plumbing (see class Javadoc) -- never register a
                     // watch on it and never let its creation itself count as notification-worthy.
+                    continue;
+                }
+                if (isEditorArtifact(changed)) {
+                    // Not real content, just an editor's own bookkeeping (see class Javadoc).
                     continue;
                 }
                 if (event.kind() == StandardWatchEventKinds.ENTRY_CREATE && Files.isDirectory(changed)) {
