@@ -4,6 +4,7 @@ import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.GlobalKiroFolderMonitor;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
 import com.ourgiant.kirocontrolpanel.util.KiroSessionLauncher;
+import com.ourgiant.kirocontrolpanel.util.NotificationThrottle;
 import com.ourgiant.kirocontrolpanel.util.ProcessDetacher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +17,7 @@ import java.awt.event.WindowEvent;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Paths;
+import java.time.Duration;
 
 /**
  * Entry point. Boots the tray icon and keeps the app resident there; the
@@ -25,8 +27,15 @@ import java.nio.file.Paths;
 public class TrayApp {
     private static final Logger logger = LoggerFactory.getLogger(TrayApp.class);
     private static final String TOOLTIP = "Kiro Control Panel";
+    // A single external editing session (e.g. open a file in vim, save it a few times, quit)
+    // can trip the folder monitor several times, each several seconds apart -- well outside
+    // its 1s debounce window. Every change is still logged at INFO regardless; this only
+    // throttles how often the user gets interrupted with a popup they have to dismiss. See #62.
+    private static final Duration EXTERNAL_CHANGE_NOTIFICATION_COOLDOWN = Duration.ofSeconds(60);
 
     private final AppPreferences preferences = new AppPreferences();
+    private final NotificationThrottle externalChangeNotificationThrottle =
+        new NotificationThrottle(EXTERNAL_CHANGE_NOTIFICATION_COOLDOWN);
     private MainWindow mainWindow;
     private TrayIcon trayIcon;
     private boolean dockReopenSupported;
@@ -156,7 +165,9 @@ public class TrayApp {
 
     private void notifyGlobalKiroChanged() {
         logger.info("Detected a change under the global .kiro folder from outside this app");
-        if (trayIcon != null) {
+        // Every change is logged above regardless -- the throttle only decides whether this
+        // particular change also earns a popup the user has to dismiss.
+        if (trayIcon != null && externalChangeNotificationThrottle.tryAcquire()) {
             trayIcon.displayMessage("Kiro configuration changed",
                 "Files under ~/.kiro (steering docs, skills, agents, or MCP servers) changed outside "
                     + "Kiro Control Panel. Worth a look if you weren't expecting it.",
