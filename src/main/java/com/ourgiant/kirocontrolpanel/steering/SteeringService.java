@@ -69,6 +69,7 @@ public class SteeringService {
 
     public void save(SteeringDoc doc) throws IOException {
         Path filePath = doc.getFilePath();
+        SelfWriteTracker.markAboutToWrite(filePath.getParent());
         Files.createDirectories(filePath.getParent());
 
         Map<String, Object> frontMatter = new LinkedHashMap<>();
