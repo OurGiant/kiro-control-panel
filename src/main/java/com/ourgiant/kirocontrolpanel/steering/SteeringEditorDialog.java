@@ -35,6 +35,11 @@ public class SteeringEditorDialog extends JDialog {
 
         initializeUI();
         loadFromDoc();
+        // See SkillEditorDialog's equivalent comment / #48: an unbounded text field/area
+        // sizes to its loaded content rather than wrapping, so pack() alone can produce an
+        // oversized window for a long doc. An explicit preferred size overrides that; still
+        // resizable larger from here.
+        setPreferredSize(new Dimension(1024, 768));
         pack();
         setMinimumSize(new Dimension(560, 480));
         setLocationRelativeTo(parent);

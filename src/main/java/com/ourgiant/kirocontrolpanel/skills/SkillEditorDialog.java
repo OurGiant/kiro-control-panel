@@ -38,6 +38,12 @@ public class SkillEditorDialog extends JDialog {
 
         initializeUI();
         loadFromSkill();
+        // Content-driven pack() alone can blow up past the screen: an unbounded JTextField
+        // sizes to its current text (no columns set), and bodyArea's wrapped JTextArea has
+        // no rows/columns floor either, so a long description or SKILL.md body drives pack()
+        // to an oversized preferred size instead of the normal "wrap within the window" behavior.
+        // An explicit preferred size overrides that; still resizable larger from here. See #48.
+        setPreferredSize(new Dimension(1024, 768));
         pack();
         setMinimumSize(new Dimension(600, 520));
         setLocationRelativeTo(parent);
