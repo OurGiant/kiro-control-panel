@@ -69,6 +69,7 @@ public final class GitAutoCommitter {
             run(kiroHome, "config", "user.email", "kiro-control-panel@localhost");
             Path gitignore = kiroHome.resolve(".gitignore");
             if (!Files.exists(gitignore)) {
+                SelfWriteTracker.markAboutToWrite(gitignore);
                 Files.writeString(gitignore, GITIGNORE_CONTENT, StandardCharsets.UTF_8);
             }
             run(kiroHome, "add", "-A");
