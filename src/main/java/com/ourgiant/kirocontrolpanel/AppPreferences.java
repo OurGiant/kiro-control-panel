@@ -20,6 +20,7 @@ public class AppPreferences {
     private static final String KEY_FIRST_RUN_COMPLETE = "firstRunComplete";
     private static final String KEY_SKIP_POWERSHELL_PROFILE = "skipPowerShellProfile";
     private static final String KEY_GIT_TRACKING_ENABLED = "gitTrackingEnabled";
+    private static final String KEY_FOLDER_MONITOR_ALERTS_ENABLED = "folderMonitorAlertsEnabled";
 
     private static final String WORKSPACE_DELIMITER = "\n";
     private static final String DEFAULT_THEME = "GitHub Dark";
@@ -109,5 +110,20 @@ public class AppPreferences {
 
     public void setGitTrackingEnabled(boolean enabled) {
         prefs.putBoolean(KEY_GIT_TRACKING_ENABLED, enabled);
+    }
+
+    /**
+     * On by default: Kiro reads everything under the global ~/.kiro tree as instructions, so a
+     * heads-up on unexpected external changes is the safer default. Users who find it noisy
+     * (or who trust what's about to change, e.g. before a Kiro session that edits skills) can
+     * turn it off in Settings -- see also the session-only "Pause Change Alerts" File menu item
+     * for a lighter-weight alternative that doesn't require remembering to turn this back on.
+     */
+    public boolean isFolderMonitorAlertsEnabled() {
+        return prefs.getBoolean(KEY_FOLDER_MONITOR_ALERTS_ENABLED, true);
+    }
+
+    public void setFolderMonitorAlertsEnabled(boolean enabled) {
+        prefs.putBoolean(KEY_FOLDER_MONITOR_ALERTS_ENABLED, enabled);
     }
 }

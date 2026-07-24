@@ -39,6 +39,9 @@ public class TrayApp {
     private MainWindow mainWindow;
     private TrayIcon trayIcon;
     private boolean dockReopenSupported;
+    // Session-only (see MainWindow's "Pause Change Alerts" File menu item, #66) -- deliberately
+    // not persisted to AppPreferences, unlike isFolderMonitorAlertsEnabled().
+    private boolean alertsPausedForSession;
 
     public static void main(String[] args) {
         // Must be set before the first HttpClient/ProxySelector use (catalog refresh,
@@ -64,6 +67,7 @@ public class TrayApp {
 
         mainWindow = new MainWindow(preferences, watcher);
         mainWindow.setQuitHandler(this::exitApplication);
+        mainWindow.setAlertsPauseHandler(paused -> alertsPausedForSession = paused);
         mainWindow.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
@@ -165,8 +169,11 @@ public class TrayApp {
 
     private void notifyGlobalKiroChanged() {
         logger.info("Detected a change under the global .kiro folder from outside this app");
-        // Every change is logged above regardless -- the throttle only decides whether this
-        // particular change also earns a popup the user has to dismiss.
+        // Every change is logged above regardless, permanently disabled or paused or not --
+        // the audit trail from #49/#50 stays intact either way, only the popup is gated.
+        if (!preferences.isFolderMonitorAlertsEnabled() || alertsPausedForSession) {
+            return;
+        }
         if (trayIcon != null && externalChangeNotificationThrottle.tryAcquire()) {
             trayIcon.displayMessage("Kiro configuration changed",
                 "Files under ~/.kiro (steering docs, skills, agents, or MCP servers) changed outside "
