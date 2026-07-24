@@ -2,6 +2,7 @@ package com.ourgiant.kirocontrolpanel.skills;
 
 import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.util.FrontMatterParser;
+import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,6 +82,7 @@ public class SkillService {
         frontMatter.putAll(skill.getExtraFrontMatter());
 
         String content = FrontMatterParser.serialize(frontMatter, skill.getBody());
+        SelfWriteTracker.markAboutToWrite(skill.getSkillMdPath());
         Files.writeString(skill.getSkillMdPath(), content, StandardCharsets.UTF_8);
         logger.info("Saved skill {}", skill.getSkillMdPath());
     }

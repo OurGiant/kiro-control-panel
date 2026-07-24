@@ -11,6 +11,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GlobalKiroFolderMonitorTest {
@@ -78,6 +79,27 @@ class GlobalKiroFolderMonitorTest {
         Files.writeString(mySkillDir.resolve("SKILL.md"), "---\nname: x\n---\nbody");
         assertTrue(thirdCallback.await(20, TimeUnit.SECONDS),
             "callback should fire for a file written into the newly (recursively) registered subdirectory");
+    }
+
+    @Test
+    @Timeout(30)
+    void suppressesCallbackForAPathThisAppJustWrote() throws IOException, InterruptedException {
+        Path selfWritten = tempDir.resolve("mcp.json");
+        Path external = tempDir.resolve("steering.md");
+        CountDownLatch latch = new CountDownLatch(1);
+        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+
+        SelfWriteTracker.markAboutToWrite(selfWritten);
+        Files.writeString(selfWritten, "{}");
+
+        // Bounded but well short of the 10s suppression window or the (still generous,
+        // macOS-polling-driven) 20s timeout used elsewhere -- just confirms no callback
+        // fires promptly, without making this test wait out the full window.
+        assertFalse(latch.await(5, TimeUnit.SECONDS), "callback should not fire for a self-written path");
+
+        Files.writeString(external, "unrelated change");
+        assertTrue(latch.await(20, TimeUnit.SECONDS),
+            "callback should still fire for an unrelated, non-self-written change");
     }
 
     @Test

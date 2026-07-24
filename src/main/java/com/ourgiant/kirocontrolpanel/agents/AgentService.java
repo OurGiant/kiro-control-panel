@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.PrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.util.JsonMapperFactory;
+import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +62,7 @@ public class AgentService {
     public void save(AgentConfig config) throws IOException {
         Path filePath = config.getFilePath();
         Files.createDirectories(filePath.getParent());
+        SelfWriteTracker.markAboutToWrite(filePath);
         mapper.writer(prettyPrinter).writeValue(filePath.toFile(), config);
         logger.info("Saved agent config {}", filePath);
     }
