@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Steering docs tab: lists .kiro/steering/*.md for a Global or pinned-workspace
@@ -26,6 +27,7 @@ import java.util.List;
  */
 public class SteeringPanel extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(SteeringPanel.class);
+    private static final Pattern VALID_STEERING_FILE_NAME = Pattern.compile("[a-z0-9][a-z0-9-]*");
 
     private final SteeringService steeringService = new SteeringService();
     private final DirectoryWatcher watcher;
@@ -132,9 +134,14 @@ public class SteeringPanel extends JPanel {
             return;
         }
         fileName = fileName.trim();
-        if (!fileName.endsWith(".md")) {
-            fileName = fileName + ".md";
+        String baseName = fileName.endsWith(".md") ? fileName.substring(0, fileName.length() - 3) : fileName;
+        if (!VALID_STEERING_FILE_NAME.matcher(baseName).matches()) {
+            JOptionPane.showMessageDialog(this,
+                "File names should be lowercase letters, digits, and hyphens only (optionally ending in .md).",
+                "Invalid Name", JOptionPane.WARNING_MESSAGE);
+            return;
         }
+        fileName = baseName + ".md";
 
         Path dir = scope.isGlobal()
             ? KiroPaths.globalSteeringDir()
