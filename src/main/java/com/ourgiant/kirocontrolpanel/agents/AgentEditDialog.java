@@ -22,8 +22,14 @@ public class AgentEditDialog extends JDialog {
 
         initializeUI();
         formPanel.populateFrom(agent);
+        // See SkillEditorDialog's equivalent comment / #48: pack() alone can size to an
+        // oversized preferred height driven by loaded content, and tying the *minimum*
+        // height to that same pack()-computed getHeight() (as this used to) means the user
+        // couldn't even resize back down. An explicit preferred size overrides that; still
+        // resizable larger from here.
+        setPreferredSize(new Dimension(1024, 768));
         pack();
-        setMinimumSize(new Dimension(560, getHeight()));
+        setMinimumSize(new Dimension(560, 480));
         setLocationRelativeTo(parent);
     }
 
