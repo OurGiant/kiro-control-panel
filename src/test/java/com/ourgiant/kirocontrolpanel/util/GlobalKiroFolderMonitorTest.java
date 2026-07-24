@@ -104,6 +104,27 @@ class GlobalKiroFolderMonitorTest {
 
     @Test
     @Timeout(30)
+    void suppressesCallbackForANewlyCreatedSelfWrittenDirectory() throws IOException, InterruptedException {
+        // Regression test for #58: SkillService (and friends) create a brand-new directory
+        // via Files.createDirectories() before writing into it. If only the file path gets
+        // marked and not the directory itself, the directory's own ENTRY_CREATE event slips
+        // past suppression and falsely reports an in-app save as an external change.
+        Path newDir = tempDir.resolve("my-skill");
+        CountDownLatch latch = new CountDownLatch(1);
+        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+
+        SelfWriteTracker.markAboutToWrite(newDir);
+        Files.createDirectory(newDir);
+
+        assertFalse(latch.await(5, TimeUnit.SECONDS), "callback should not fire for a self-written new directory");
+
+        Files.writeString(tempDir.resolve("steering.md"), "unrelated change");
+        assertTrue(latch.await(20, TimeUnit.SECONDS),
+            "callback should still fire for an unrelated, non-self-written change");
+    }
+
+    @Test
+    @Timeout(30)
     void neverReportsChangesUnderGitInternalDirectoryPresentAtStartup() throws IOException, InterruptedException {
         // Regression test for #60: GitAutoCommitter (#49) writes several files under .git/
         // per commit (index, COMMIT_EDITMSG, logs/HEAD, refs/, objects/...) that

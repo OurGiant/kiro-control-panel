@@ -62,6 +62,7 @@ public class AgentService {
 
     public void save(AgentConfig config) throws IOException {
         Path filePath = config.getFilePath();
+        SelfWriteTracker.markAboutToWrite(filePath.getParent());
         Files.createDirectories(filePath.getParent());
         SelfWriteTracker.markAboutToWrite(filePath);
         mapper.writer(prettyPrinter).writeValue(filePath.toFile(), config);

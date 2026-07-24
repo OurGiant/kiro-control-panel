@@ -54,6 +54,7 @@ public class HookService {
     }
 
     public void save(Path filePath, HookFile file) throws IOException {
+        SelfWriteTracker.markAboutToWrite(filePath.getParent());
         Files.createDirectories(filePath.getParent());
         SelfWriteTracker.markAboutToWrite(filePath);
         mapper.writer(prettyPrinter).writeValue(filePath.toFile(), file);
