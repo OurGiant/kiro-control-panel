@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,6 +18,7 @@ import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class KiroSessionLauncherTest {
@@ -119,6 +122,18 @@ class KiroSessionLauncherTest {
 
         assertEquals(List.of("cmd.exe", "/c", "start", "Kiro Session", "pwsh.exe", "-NoExit", "-NoProfile",
             "-Command", "Set-Location -LiteralPath 'C:\\plain'; kiro-cli"), command);
+    }
+
+    @ParameterizedTest(name = "rejects unsafe Windows directory character: {0}")
+    @ValueSource(strings = {"&", "|", "^", "%", "<", ">", "\""})
+    void windowsCommandRejectsDirectoriesContainingCmdMetacharacters(String unsafeChar) {
+        // Regression test for #71: cmd.exe /c (needed for #36's console-detach fix) reinterprets
+        // its own metacharacters in the reconstructed command line -- a layer the PowerShell
+        // single-quote escaping alone doesn't cover. NTFS permits all of these in a folder name.
+        String directory = "C:\\evil" + unsafeChar + "calc.exe";
+
+        assertThrows(IllegalArgumentException.class,
+            () -> KiroSessionLauncher.buildWindowsCommand(directory, false));
     }
 
     @Test

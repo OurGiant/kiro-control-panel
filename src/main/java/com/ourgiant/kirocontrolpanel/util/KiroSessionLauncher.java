@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 /**
  * Launches kiro-cli in a brand new, independent OS terminal window -- never
@@ -28,6 +29,8 @@ public final class KiroSessionLauncher {
     private static final Logger logger = LoggerFactory.getLogger(KiroSessionLauncher.class);
     private static final String GNOME_TERMINAL_BINARY = "gnome-terminal";
     private static final String PWSH_BINARY = "pwsh.exe";
+    // cmd.exe's own command/control metacharacters -- see buildWindowsCommand's javadoc.
+    private static final Pattern WINDOWS_UNSAFE_DIRECTORY_CHARACTERS = Pattern.compile("[&|^%<>\"]");
 
     private KiroSessionLauncher() {
     }
@@ -66,13 +69,27 @@ public final class KiroSessionLauncher {
      * instead, leaving the new console window blank/unresponsive -- see #36.
      * "Kiro Session" must be present: start treats the first quoted arg as the
      * window title, and ProcessBuilder quotes it for us since it contains a space.
+     * <p>
+     * Going through {@code cmd.exe /c} is a second, independent parsing layer on top of
+     * the PowerShell single-quote escaping below: cmd.exe reinterprets its own
+     * command/control metacharacters ({@code & | ^ % < >}) in the reconstructed command
+     * line before pwsh.exe ever sees it -- NTFS permits all of those in a folder name.
+     * Hand-rolling cmd.exe-safe escaping is notoriously easy to get subtly wrong, so this
+     * refuses outright instead: a workspace folder containing one of them can't be used
+     * with "Launch kiro-cli..." on Windows. See #71.
      *
      * @param skipProfile adds -NoProfile, skipping the user's $PROFILE. On by default
      *                    (see AppPreferences#isSkipPowerShellProfile) for launch speed;
      *                    users whose profile sets up PATH/env vars kiro-cli depends on
      *                    can uncheck it -- see #42.
+     * @throws IllegalArgumentException if {@code directory} contains a character cmd.exe
+     *                    treats specially
      */
     public static List<String> buildWindowsCommand(String directory, boolean skipProfile) {
+        if (WINDOWS_UNSAFE_DIRECTORY_CHARACTERS.matcher(directory).find()) {
+            throw new IllegalArgumentException(
+                "Folder path contains a character cmd.exe treats specially (one of & | ^ % < > \"): " + directory);
+        }
         String script = "Set-Location -LiteralPath '" + escapePowerShellSingleQuoted(directory) + "'; kiro-cli";
         List<String> command = new ArrayList<>(List.of("cmd.exe", "/c", "start", "Kiro Session",
             PWSH_BINARY, "-NoExit"));
@@ -163,7 +180,18 @@ public final class KiroSessionLauncher {
                 "Not Found", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        startFireAndForget(parent, buildWindowsCommand(directory, skipProfile));
+        List<String> command;
+        try {
+            command = buildWindowsCommand(directory, skipProfile);
+        } catch (IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(parent,
+                "This folder's name contains a character that can't be safely passed through "
+                    + "Windows' command shell (one of & | ^ % < > \"):\n" + directory
+                    + "\n\nRename the folder, or launch kiro-cli manually there.",
+                "Unsupported Folder Name", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        startFireAndForget(parent, command);
     }
 
     private static void startFireAndForget(Component parent, List<String> command) {

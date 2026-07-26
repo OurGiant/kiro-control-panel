@@ -132,11 +132,26 @@ public class AboutDialog extends JDialog {
             @Override
             public void mouseClicked(MouseEvent e) {
                 try {
-                    Desktop.getDesktop().browse(new URI(info.htmlUrl()));
+                    URI uri = new URI(info.htmlUrl());
+                    if (!isTrustedReleaseUrl(uri)) {
+                        logger.warn("Refusing to open untrusted release URL: {}", info.htmlUrl());
+                        return;
+                    }
+                    Desktop.getDesktop().browse(uri);
                 } catch (Exception ex) {
                     logger.warn("Could not open release URL in browser", ex);
                 }
             }
         });
+    }
+
+    /**
+     * Defense in depth, not a response to a live exploit: {@code htmlUrl} comes straight from
+     * GitHub's releases API response, so a tampered response (only possible with an existing
+     * TLS MITM position) could otherwise point this at an arbitrary URI/scheme. Restrict to
+     * exactly the host the API is expected to point back to. See #71.
+     */
+    static boolean isTrustedReleaseUrl(URI uri) {
+        return "https".equalsIgnoreCase(uri.getScheme()) && "github.com".equalsIgnoreCase(uri.getHost());
     }
 }
