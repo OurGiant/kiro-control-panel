@@ -1,11 +1,13 @@
 package com.ourgiant.kirocontrolpanel;
 
+import com.ourgiant.kirocontrolpanel.util.AppVersion;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.GlobalKiroFolderMonitor;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
 import com.ourgiant.kirocontrolpanel.util.KiroSessionLauncher;
 import com.ourgiant.kirocontrolpanel.util.NotificationThrottle;
 import com.ourgiant.kirocontrolpanel.util.ProcessDetacher;
+import com.ourgiant.kirocontrolpanel.util.UpdateChecker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,6 +20,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.Optional;
 
 /**
  * Entry point. Boots the tray icon and keeps the app resident there; the
@@ -90,6 +93,48 @@ public class TrayApp {
             new FirstRunDialog(mainWindow).setVisible(true);
             preferences.setFirstRunComplete(true);
         }
+
+        checkForUpdateAndNotifyIfNewer();
+    }
+
+    /**
+     * Silent unless there's actually something to say: no UI at all if up to date or the
+     * check fails, and only once per newly-released version (not once per launch) if
+     * there's an update -- otherwise a known update sitting unapplied would pop this on
+     * every single startup. A user can still always check manually via Help > About
+     * regardless of this state. See #68.
+     */
+    private void checkForUpdateAndNotifyIfNewer() {
+        SwingWorker<Optional<UpdateChecker.ReleaseInfo>, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Optional<UpdateChecker.ReleaseInfo> doInBackground() {
+                return UpdateChecker.fetchLatestRelease();
+            }
+
+            @Override
+            protected void done() {
+                Optional<UpdateChecker.ReleaseInfo> release;
+                try {
+                    release = get();
+                } catch (Exception e) {
+                    logger.warn("Silent startup update check failed", e);
+                    return;
+                }
+                if (release.isEmpty()) {
+                    return;
+                }
+                UpdateChecker.ReleaseInfo info = release.get();
+                if (!UpdateChecker.isNewerVersion(info.version(), AppVersion.resolve())) {
+                    return;
+                }
+                if (info.version().equals(preferences.getLastNotifiedUpdateVersion())) {
+                    return;
+                }
+                preferences.setLastNotifiedUpdateVersion(info.version());
+                new AboutDialog(mainWindow, info).setVisible(true);
+            }
+        };
+        worker.execute();
     }
 
     /**
