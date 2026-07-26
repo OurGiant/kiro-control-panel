@@ -21,6 +21,7 @@ public class AppPreferences {
     private static final String KEY_SKIP_POWERSHELL_PROFILE = "skipPowerShellProfile";
     private static final String KEY_GIT_TRACKING_ENABLED = "gitTrackingEnabled";
     private static final String KEY_FOLDER_MONITOR_ALERTS_ENABLED = "folderMonitorAlertsEnabled";
+    private static final String KEY_LAST_NOTIFIED_UPDATE_VERSION = "lastNotifiedUpdateVersion";
 
     private static final String WORKSPACE_DELIMITER = "\n";
     private static final String DEFAULT_THEME = "GitHub Dark";
@@ -125,5 +126,18 @@ public class AppPreferences {
 
     public void setFolderMonitorAlertsEnabled(boolean enabled) {
         prefs.putBoolean(KEY_FOLDER_MONITOR_ALERTS_ENABLED, enabled);
+    }
+
+    /**
+     * The version the silent startup update check last auto-opened the About box for, so it
+     * doesn't nag on every single launch while a known update sits unapplied -- once per new
+     * version, not once per launch. Empty string if never notified. See #68.
+     */
+    public String getLastNotifiedUpdateVersion() {
+        return prefs.get(KEY_LAST_NOTIFIED_UPDATE_VERSION, "");
+    }
+
+    public void setLastNotifiedUpdateVersion(String version) {
+        prefs.put(KEY_LAST_NOTIFIED_UPDATE_VERSION, version);
     }
 }

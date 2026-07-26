@@ -18,7 +18,18 @@ import java.util.Optional;
 public class AboutDialog extends JDialog {
     private static final Logger logger = LoggerFactory.getLogger(AboutDialog.class);
 
+    /** Help > About: does its own live check, same as always. */
     public AboutDialog(Frame parent) {
+        this(parent, null);
+    }
+
+    /**
+     * TrayApp's silent startup check (#68) already knows {@code knownNewerRelease} -- skips
+     * a second, redundant network call and shows it immediately instead of flashing
+     * "Checking for updates..." first. Pass {@code null} to check live instead, same as the
+     * single-arg constructor.
+     */
+    public AboutDialog(Frame parent, UpdateChecker.ReleaseInfo knownNewerRelease) {
         super(parent, "About Kiro Control Panel", true);
         String currentVersion = AppVersion.resolve();
 
@@ -44,7 +55,11 @@ public class AboutDialog extends JDialog {
 
         JLabel updateLabel = new JLabel("Checking for updates...");
         updateLabel.setForeground(Color.GRAY);
-        startUpdateCheck(updateLabel, currentVersion);
+        if (knownNewerRelease != null) {
+            applyNewerReleaseAvailable(updateLabel, knownNewerRelease);
+        } else {
+            startUpdateCheck(updateLabel, currentVersion);
+        }
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton closeButton = new JButton("Close");
@@ -103,21 +118,25 @@ public class AboutDialog extends JDialog {
                     updateLabel.setForeground(new Color(0, 128, 0));
                     return;
                 }
-                updateLabel.setText("<html><a href=''>Version " + info.version() + " available</a></html>");
-                updateLabel.setForeground(new Color(0, 102, 204));
-                updateLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                updateLabel.addMouseListener(new MouseAdapter() {
-                    @Override
-                    public void mouseClicked(MouseEvent e) {
-                        try {
-                            Desktop.getDesktop().browse(new URI(info.htmlUrl()));
-                        } catch (Exception ex) {
-                            logger.warn("Could not open release URL in browser", ex);
-                        }
-                    }
-                });
+                applyNewerReleaseAvailable(updateLabel, info);
             }
         };
         worker.execute();
+    }
+
+    private void applyNewerReleaseAvailable(JLabel updateLabel, UpdateChecker.ReleaseInfo info) {
+        updateLabel.setText("<html><a href=''>Version " + info.version() + " available</a></html>");
+        updateLabel.setForeground(new Color(0, 102, 204));
+        updateLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        updateLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                try {
+                    Desktop.getDesktop().browse(new URI(info.htmlUrl()));
+                } catch (Exception ex) {
+                    logger.warn("Could not open release URL in browser", ex);
+                }
+            }
+        });
     }
 }
