@@ -28,9 +28,15 @@ public class AboutDialog extends JDialog {
      * a second, redundant network call and shows it immediately instead of flashing
      * "Checking for updates..." first. Pass {@code null} to check live instead, same as the
      * single-arg constructor.
+     * <p>
+     * Non-modal exactly when {@code knownNewerRelease} is non-null: the auto-shown case
+     * (silent startup check found a newer version) must never block the main window --
+     * the user can ignore it entirely, keep working, and stay on the current version if
+     * they want. Help > About (a deliberate click) stays modal, the normal expectation
+     * for that kind of dialog. See #76.
      */
     public AboutDialog(Frame parent, UpdateChecker.ReleaseInfo knownNewerRelease) {
-        super(parent, "About Kiro Control Panel", true);
+        super(parent, "About Kiro Control Panel", knownNewerRelease == null);
         String currentVersion = AppVersion.resolve();
 
         setLayout(new BorderLayout(12, 12));
