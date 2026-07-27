@@ -17,6 +17,7 @@ import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -50,11 +51,19 @@ import java.util.regex.Pattern;
  * suppressed -- they're never real content, so editing a file externally (e.g. in vim)
  * doesn't produce a burst of one alert per swap-file-create/write/rename/swap-file-delete
  * step. See #62.
+ * <p>
+ * {@code sessions/} and {@code extensions/} are also ignored outright -- the same
+ * "Kiro-managed, ephemeral session state" directories {@link GitAutoCommitter} already
+ * excludes from its own .gitignore for #49. Kiro CLI writes new files under
+ * {@code sessions/cli/} on every launch, which isn't a self-write this app's
+ * {@link SelfWriteTracker} can know about (it's a different process), so without this
+ * exclusion simply starting kiro-cli tripped the alert every time. See #74.
  */
 public final class GlobalKiroFolderMonitor {
     private static final Logger logger = LoggerFactory.getLogger(GlobalKiroFolderMonitor.class);
     private static final int DEBOUNCE_MILLIS = 1000;
     private static final String GIT_INTERNAL_DIR_NAME = ".git";
+    private static final Set<String> KIRO_MANAGED_STATE_DIR_NAMES = Set.of("sessions", "extensions");
     private static final Pattern EDITOR_ARTIFACT_PATTERN = Pattern.compile(
         "^\\..*\\.sw[a-z]$"    // vim swap file, e.g. .SKILL.md.swp
             + "|^4913$"         // vim's writability-check temp file
@@ -85,7 +94,7 @@ public final class GlobalKiroFolderMonitor {
             Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                    if (isGitInternal(dir)) {
+                    if (isGitInternal(dir) || isKiroManagedStateDir(dir)) {
                         return FileVisitResult.SKIP_SUBTREE;
                     }
                     registerQuietly(dir);
@@ -99,6 +108,10 @@ public final class GlobalKiroFolderMonitor {
 
     private static boolean isGitInternal(Path path) {
         return GIT_INTERNAL_DIR_NAME.equals(String.valueOf(path.getFileName()));
+    }
+
+    private static boolean isKiroManagedStateDir(Path path) {
+        return KIRO_MANAGED_STATE_DIR_NAMES.contains(String.valueOf(path.getFileName()));
     }
 
     private static boolean isEditorArtifact(Path path) {
@@ -133,6 +146,7 @@ public final class GlobalKiroFolderMonitor {
             boolean notificationWorthy = false;
             for (WatchEvent<?> event : key.pollEvents()) {
                 if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
+                    logger.info("External change detected: watch overflow (some events may have been dropped)");
                     notificationWorthy = true;
                     continue;
                 }
@@ -140,6 +154,11 @@ public final class GlobalKiroFolderMonitor {
                 if (isGitInternal(changed)) {
                     // GitAutoCommitter's own plumbing (see class Javadoc) -- never register a
                     // watch on it and never let its creation itself count as notification-worthy.
+                    continue;
+                }
+                if (isKiroManagedStateDir(changed)) {
+                    // Kiro's own ephemeral session/extension state (see class Javadoc) -- same
+                    // treatment as .git above.
                     continue;
                 }
                 if (isEditorArtifact(changed)) {
@@ -150,6 +169,7 @@ public final class GlobalKiroFolderMonitor {
                     registerQuietly(changed);
                 }
                 if (!SelfWriteTracker.wasRecentlyWrittenByThisApp(changed)) {
+                    logger.info("External change detected: {} ({})", changed, event.kind().name());
                     notificationWorthy = true;
                 }
             }
