@@ -1,6 +1,9 @@
 package com.ourgiant.kirocontrolpanel;
 
 import com.ourgiant.kirocontrolpanel.agents.AgentsPanel;
+import com.ourgiant.kirocontrolpanel.diagnostics.Finding;
+import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanDialog;
+import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanner;
 import com.ourgiant.kirocontrolpanel.hooks.HooksPanel;
 import com.ourgiant.kirocontrolpanel.mcp.McpPanel;
 import com.ourgiant.kirocontrolpanel.skills.SkillsPanel;
@@ -13,6 +16,8 @@ import javax.swing.*;
 import java.awt.Dimension;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -106,6 +111,10 @@ public class MainWindow extends JFrame {
         viewLogsItem.addActionListener(e -> new LogViewerDialog(this).setVisible(true));
         helpMenu.add(viewLogsItem);
 
+        JMenuItem scanSetupItem = new JMenuItem("Scan Kiro Setup...");
+        scanSetupItem.addActionListener(e -> runSetupScan());
+        helpMenu.add(scanSetupItem);
+
         helpMenu.addSeparator();
 
         JMenuItem aboutItem = new JMenuItem("About");
@@ -113,6 +122,18 @@ public class MainWindow extends JFrame {
         helpMenu.add(aboutItem);
 
         return helpMenu;
+    }
+
+    private void runSetupScan() {
+        new KiroSetupScanDialog(this, scanForFindings(preferences)).setVisible(true);
+    }
+
+    /** Also used by TrayApp for the silent first-run scan. */
+    public static List<Finding> scanForFindings(AppPreferences preferences) {
+        List<WorkspaceScope> scopes = new ArrayList<>();
+        scopes.add(WorkspaceScope.global());
+        scopes.addAll(WorkspaceScope.pinnedWorkspaces(preferences));
+        return new KiroSetupScanner().scan(scopes);
     }
 
     /** TrayApp wires this to its own exit logic (tray icon cleanup, System.exit). */

@@ -109,8 +109,8 @@ public class WorkspaceScopeBar extends JPanel {
         if (includeGlobal) {
             scopeModel.addElement(WorkspaceScope.global());
         }
-        for (String workspace : preferences.getWorkspaces()) {
-            scopeModel.addElement(new WorkspaceScope(workspace, Paths.get(workspace)));
+        for (WorkspaceScope scope : WorkspaceScope.pinnedWorkspaces(preferences)) {
+            scopeModel.addElement(scope);
         }
         if (previouslySelected != null) {
             for (int i = 0; i < scopeModel.getSize(); i++) {

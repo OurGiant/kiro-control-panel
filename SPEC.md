@@ -840,3 +840,81 @@ this workflow has ever run, or whether its branch's PR has been opened
 and merged yet.
 
 131 tests total.
+
+## Kiro setup scan (issue #78)
+
+An onboarding gap for users adopting this tool against an existing,
+hand-edited `~/.kiro` tree: nothing previously detected config files that
+don't match the shape Kiro/this app expect, whether from manual editing or
+just age. The raw issue ask ("best practices", "base content") was scoped
+down through conversation to **structural correctness only** — not content
+or style judgment (no nudging about missing descriptions, `autoApprove`
+policy, etc.) — to avoid turning a scanner into an opinionated linter over
+users' own config.
+
+**Two finding tiers**, both surfaced by a new `diagnostics` package
+(`KiroSurface`, `FindingSeverity`, `Finding`, `Fix`, `KiroSetupScanner`):
+1. **Invalid/unparseable** (bad JSON / bad YAML front matter) — never
+   auto-repaired, since there's no way to guess intended content from
+   broken syntax; the only action offered is "Open File."
+2. **Structural violations** — a file parses fine but doesn't match Kiro's
+   expected shape. Two of these are genuinely, mechanically auto-fixable
+   (a loose `.md` file in `skills/` → moved into its own `<name>/SKILL.md`
+   subfolder via `SkillFileRelocationFix`; a hooks file whose top-level
+   JSON is a bare array → wrapped in `{"version":"v1","hooks":[...]}` via
+   `HookArrayWrapFix`, reusing `HookService.save()` verbatim). The rest
+   (MCP server with neither `command` nor `url`; hook entry missing
+   `name`/`trigger`/`action`; steering `fileMatch` with no
+   `fileMatchPattern`; steering `auto` with no `name`/`description`) can't
+   be auto-fixed without inventing content, so they're report-only.
+
+**Every existing `*Service.list*()`/`load()` method silently swallows
+parse/IO errors** into a log line and omits the broken item — a corrupt
+file looks identical to "nothing configured," discovered while designing
+this feature. The scanner can't reuse those `list*` methods for corruption
+detection: MCP/Hooks are parsed directly via a fresh Jackson pass, while
+Steering/Skills/Agents reuse each service's public single-file
+`load(path, workspaceRoot)` method, which does throw — deliberately
+picking the least duplicative option per surface rather than bypassing all
+five uniformly. `FrontMatterParser.parse()` also turned out to throw an
+**unchecked** `YAMLException` on malformed front matter, uncaught anywhere
+existing — the scanner catches `RuntimeException` alongside `IOException`
+per file so one bad file can't abort a whole scan.
+
+**UI mirrors the established two-layer split**: `KiroSetupFindingsPanel`
+(plain `JPanel` — status label, findings list, "Open File"/"Fix..."
+buttons) is unit-testable headlessly, wrapped by thin, untested
+`KiroSetupScanDialog` chrome (`JDialog` throws `HeadlessException` in this
+project's build container, same as every other dialog here). Scanning
+itself is synchronous, not `SwingWorker`-backed — every other panel in
+this app already does local `.kiro` file I/O synchronously on the EDT, and
+a scan across a handful of pinned workspaces is the same class of
+operation; `SwingWorker` in this app is reserved for genuine network calls
+(catalog fetch, update check).
+
+**Two entry points**: `Help > Scan Kiro Setup...` (on demand, always
+opens even with zero findings — a useful confirmation for an explicit
+action) and a silent scan right after the first-run welcome dialog (opens
+`KiroSetupScanDialog` only if something was actually found, so a clean
+setup shows nothing).
+
+Two small DRY extractions made along the way, both behavior-preserving:
+`WorkspaceScope.pinnedWorkspaces(AppPreferences)` (the "every pinned
+workspace" loop was previously inlined only in
+`WorkspaceScopeBar.reload()`) and `DesktopUtils.openFile()` (a sibling to
+the existing `revealInFileManager`, opening the file itself in its
+OS-associated default app rather than revealing its parent folder).
+
+**Verified end-to-end on the host**, not just unit-tested: a driven-UI
+harness built a real fixture `.kiro` tree covering all six finding
+combinations across all five surfaces, opened the actual
+`KiroSetupScanDialog`, selected and applied both auto-fixes through the
+real Fix button (including its confirm `JOptionPane`), and confirmed both
+the on-disk result and the list's updated state — the strongest available
+proof this actually repairs a real Kiro tree, not just a temp-dir fixture.
+The Fix button's failure path (an `IOException` from `Fix.apply()`
+triggers an error `JOptionPane`) isn't unit tested, same
+`HeadlessException` limitation as the invalid-JSON confirm dialogs
+elsewhere in this app.
+
+208 tests total.
