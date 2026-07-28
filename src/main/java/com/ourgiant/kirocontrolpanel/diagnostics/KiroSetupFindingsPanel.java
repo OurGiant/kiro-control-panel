@@ -99,7 +99,7 @@ public class KiroSetupFindingsPanel extends JPanel {
     private void onOpenFile() {
         Finding selected = findingList.getSelectedValue();
         if (selected != null) {
-            InAppFileEditorLauncher.open((Frame) SwingUtilities.getWindowAncestor(this),
+            InAppFileEditorLauncher.open(InAppFileEditorLauncher.resolveFrame(this),
                 selected.surface(), selected.scope(), selected.path());
         }
     }

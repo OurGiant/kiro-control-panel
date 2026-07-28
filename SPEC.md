@@ -1091,4 +1091,32 @@ confirming both the file was actually rewritten and the resulting
 `ChangeLogService` entry was recorded as `SELF`, never `EXTERNAL` — the
 concrete proof this fix actually closes the gap it set out to close.
 
+**A real bug in that first verification pass, found by the user running an
+actual fresh build, not by anything above**: `(Frame)
+SwingUtilities.getWindowAncestor(this)` inside `KiroSetupFindingsPanel`/
+`ChangeLogPanel` threw `ClassCastException` every time, in the real app.
+Both panels are embedded in a `JDialog` (`KiroSetupScanDialog`/
+`ChangeLogDialog`), not directly in `MainWindow` (a `JFrame`) the way every
+other panel with this exact cast idiom is — so the immediate window
+ancestor is a `Dialog`, never a `Frame`. The first verification harness
+called `InAppFileEditorLauncher.open(...)` directly with a hand-supplied
+parent, which happened to exercise every dispatch branch correctly but
+never actually went through the real `SwingUtilities.getWindowAncestor`
+resolution these two panels perform — a real, meaningful gap in what
+"verified end-to-end" actually covered. Fixed with
+`InAppFileEditorLauncher.resolveFrame(Component)`, which falls back to
+`((Dialog) windowAncestor).getOwner()` when the immediate ancestor is a
+Dialog — safe here because `KiroSetupScanDialog`/`ChangeLogDialog` both
+take `Frame parent` themselves and pass it straight to `super(parent,
+...)`, so their own `getOwner()` already **is** the real `MainWindow`.
+Re-verified with a second, more faithful harness that constructs the
+actual `Frame`→`Dialog`→panel→button hierarchy (not a direct call into the
+launcher) for both dialogs, confirming no `ClassCastException` and the
+correct editor opens. Not unit-testable — constructing any `Frame`/
+`Dialog`/`JDialog` throws `HeadlessException` in this project's build
+container, the same reason no `*EditDialog` anywhere in this app has
+direct test coverage; this bug's entire failure mode only exists once real
+windows are nested, which is exactly why `mvn test` couldn't have caught
+it and real on-host verification was the only way to.
+
 245 tests total.

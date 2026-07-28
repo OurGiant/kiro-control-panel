@@ -93,7 +93,7 @@ public class ChangeLogPanel extends JPanel {
             WorkspaceScope scope = entry.global()
                 ? WorkspaceScope.global()
                 : new WorkspaceScope(entry.scopeLabel(), Paths.get(entry.scopeLabel()));
-            InAppFileEditorLauncher.open((Frame) SwingUtilities.getWindowAncestor(this),
+            InAppFileEditorLauncher.open(InAppFileEditorLauncher.resolveFrame(this),
                 entry.surfaceEnum(), scope, entry.path());
         }
     }
