@@ -17,20 +17,31 @@ import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /**
- * Watches the global {@code ~/.kiro} folder tree (steering docs, skills,
- * agents, mcp.json) for external changes and invokes a callback, debounced.
- * Kiro reads everything under here as instructions -- there are documented
- * cases of adversaries poisoning steering/skills/agents with malicious
- * content -- so the user should be able to notice an unexpected change. See #50.
+ * Watches a {@code .kiro} folder tree (steering docs, skills, agents,
+ * mcp.json) for external changes and invokes a callback, debounced, with
+ * the actual changed paths. Kiro reads everything under here as
+ * instructions -- there are documented cases of adversaries poisoning
+ * steering/skills/agents with malicious content -- so the user should be
+ * able to notice an unexpected change. See #50.
+ * <p>
+ * Originally global-root-only ({@code GlobalKiroFolderMonitor}); generalized
+ * to accept any root (issue #79) so the change-log feature can run one
+ * instance per pinned workspace in addition to the fixed global instance
+ * {@code TrayApp} has always constructed. Every existing behavior below is
+ * unchanged from that original class.
  * <p>
  * Deliberately a separate watcher from {@link DirectoryWatcher} (which exists
  * to refresh whatever panel is currently in view for whatever scope is
- * currently selected): this one watches the fixed global root unconditionally
- * for the app's whole lifetime, and needs genuine recursive coverage --
+ * currently selected): this one watches a whole root unconditionally for as
+ * long as the instance is alive, and needs genuine recursive coverage --
  * including subdirectories created after startup (e.g. a new skill folder) --
  * which {@code DirectoryWatcher}'s callers never needed.
  * <p>
@@ -59,8 +70,8 @@ import java.util.regex.Pattern;
  * {@link SelfWriteTracker} can know about (it's a different process), so without this
  * exclusion simply starting kiro-cli tripped the alert every time. See #74.
  */
-public final class GlobalKiroFolderMonitor {
-    private static final Logger logger = LoggerFactory.getLogger(GlobalKiroFolderMonitor.class);
+public final class KiroFolderMonitor {
+    private static final Logger logger = LoggerFactory.getLogger(KiroFolderMonitor.class);
     private static final int DEBOUNCE_MILLIS = 1000;
     private static final String GIT_INTERNAL_DIR_NAME = ".git";
     private static final Set<String> KIRO_MANAGED_STATE_DIR_NAMES = Set.of("sessions", "extensions");
@@ -72,21 +83,50 @@ public final class GlobalKiroFolderMonitor {
             + "|.*~$"           // vim/emacs backup file
     );
 
+    /** One qualifying (non-self-written, non-excluded) change observed in a single poll iteration. */
+    public record ChangeEvent(Path path, WatchEvent.Kind<?> kind) {
+    }
+
     private final WatchService watchService;
     private final Timer debounceTimer;
+    private final List<ChangeEvent> pendingEvents = Collections.synchronizedList(new ArrayList<>());
 
-    public GlobalKiroFolderMonitor(Path root, Runnable onChange) throws IOException {
+    public KiroFolderMonitor(Path root, Consumer<List<ChangeEvent>> onChange) throws IOException {
         watchService = FileSystems.getDefault().newWatchService();
-        debounceTimer = new Timer(DEBOUNCE_MILLIS, e -> onChange.run());
+        debounceTimer = new Timer(DEBOUNCE_MILLIS, e -> fireCallback(onChange));
         debounceTimer.setRepeats(false);
 
         if (Files.isDirectory(root)) {
             registerTree(root);
         }
 
-        Thread thread = new Thread(this::pollLoop, "kiro-global-folder-monitor");
+        Thread thread = new Thread(this::pollLoop, "kiro-folder-monitor");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    private void fireCallback(Consumer<List<ChangeEvent>> onChange) {
+        List<ChangeEvent> snapshot;
+        synchronized (pendingEvents) {
+            snapshot = new ArrayList<>(pendingEvents);
+            pendingEvents.clear();
+        }
+        onChange.accept(snapshot);
+    }
+
+    /**
+     * Closes the underlying {@code WatchService}, which breaks the blocked {@code take()}
+     * call in the poll loop's thread via {@code ClosedWatchServiceException} (already caught
+     * there to exit cleanly). Needed now that instances come and go per pinned/unpinned
+     * workspace (issue #79's {@code ChangeLogWatcherManager}), not just the one fixed,
+     * app-lifetime global instance this class originally had.
+     */
+    public void close() {
+        try {
+            watchService.close();
+        } catch (IOException e) {
+            logger.warn("Failed to close folder monitor watch service", e);
+        }
     }
 
     private void registerTree(Path root) {
@@ -170,6 +210,7 @@ public final class GlobalKiroFolderMonitor {
                 }
                 if (!SelfWriteTracker.wasRecentlyWrittenByThisApp(changed)) {
                     logger.info("External change detected: {} ({})", changed, event.kind().name());
+                    pendingEvents.add(new ChangeEvent(changed, event.kind()));
                     notificationWorthy = true;
                 }
             }

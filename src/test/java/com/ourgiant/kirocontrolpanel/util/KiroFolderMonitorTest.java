@@ -9,6 +9,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardWatchEventKinds;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -16,7 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class GlobalKiroFolderMonitorTest {
+class KiroFolderMonitorTest {
 
     @TempDir
     Path tempDir;
@@ -25,7 +28,7 @@ class GlobalKiroFolderMonitorTest {
     @Timeout(30)
     void firesCallbackWhenAFileChangesInTheRoot() throws IOException, InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
-        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+        new KiroFolderMonitor(tempDir, events -> latch.countDown());
 
         Files.writeString(tempDir.resolve("mcp.json"), "{}");
 
@@ -40,7 +43,7 @@ class GlobalKiroFolderMonitorTest {
     void firesCallbackForAChangeInAPreExistingSubdirectory() throws IOException, InterruptedException {
         Path steeringDir = Files.createDirectory(tempDir.resolve("steering"));
         CountDownLatch latch = new CountDownLatch(1);
-        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+        new KiroFolderMonitor(tempDir, events -> latch.countDown());
 
         Files.writeString(steeringDir.resolve("conventions.md"), "# hi");
 
@@ -54,7 +57,7 @@ class GlobalKiroFolderMonitorTest {
         CountDownLatch firstCallback = new CountDownLatch(1);
         CountDownLatch secondCallback = new CountDownLatch(1);
         CountDownLatch thirdCallback = new CountDownLatch(1);
-        new GlobalKiroFolderMonitor(tempDir, () -> {
+        new KiroFolderMonitor(tempDir, events -> {
             switch (callCount.incrementAndGet()) {
                 case 1 -> firstCallback.countDown();
                 case 2 -> secondCallback.countDown();
@@ -89,7 +92,7 @@ class GlobalKiroFolderMonitorTest {
         Path selfWritten = tempDir.resolve("mcp.json");
         Path external = tempDir.resolve("steering.md");
         CountDownLatch latch = new CountDownLatch(1);
-        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+        new KiroFolderMonitor(tempDir, events -> latch.countDown());
 
         SelfWriteTracker.markAboutToWrite(selfWritten);
         Files.writeString(selfWritten, "{}");
@@ -113,7 +116,7 @@ class GlobalKiroFolderMonitorTest {
         // past suppression and falsely reports an in-app save as an external change.
         Path newDir = tempDir.resolve("my-skill");
         CountDownLatch latch = new CountDownLatch(1);
-        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+        new KiroFolderMonitor(tempDir, events -> latch.countDown());
 
         SelfWriteTracker.markAboutToWrite(newDir);
         Files.createDirectory(newDir);
@@ -134,7 +137,7 @@ class GlobalKiroFolderMonitorTest {
         // monitoring entirely, not left to suppression to cover every file git might touch.
         Path gitDir = Files.createDirectory(tempDir.resolve(".git"));
         CountDownLatch latch = new CountDownLatch(1);
-        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+        new KiroFolderMonitor(tempDir, events -> latch.countDown());
 
         Files.writeString(gitDir.resolve("index"), "not actually git's binary format, doesn't matter for this test");
         Path nestedRefs = Files.createDirectories(gitDir.resolve("refs").resolve("heads"));
@@ -154,7 +157,7 @@ class GlobalKiroFolderMonitorTest {
         // monitor starts (typical case -- git tracking is opt-in) and gets created later,
         // e.g. the first time a user enables it via File > Settings...
         CountDownLatch latch = new CountDownLatch(1);
-        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+        new KiroFolderMonitor(tempDir, events -> latch.countDown());
 
         Path gitDir = Files.createDirectory(tempDir.resolve(".git"));
         Files.writeString(gitDir.resolve("index"), "not actually git's binary format, doesn't matter for this test");
@@ -178,7 +181,7 @@ class GlobalKiroFolderMonitorTest {
         // already excludes from its own .gitignore for #49), not configuration content.
         Path stateDir = Files.createDirectory(tempDir.resolve(dirName));
         CountDownLatch latch = new CountDownLatch(1);
-        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+        new KiroFolderMonitor(tempDir, events -> latch.countDown());
 
         Files.writeString(stateDir.resolve("session.json"), "{}");
 
@@ -195,7 +198,7 @@ class GlobalKiroFolderMonitorTest {
     void neverReportsKiroManagedStateDirectoryCreatedAfterStartup(String dirName)
             throws IOException, InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
-        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+        new KiroFolderMonitor(tempDir, events -> latch.countDown());
 
         Path stateDir = Files.createDirectory(tempDir.resolve(dirName));
         Files.writeString(stateDir.resolve("session.json"), "{}");
@@ -210,7 +213,7 @@ class GlobalKiroFolderMonitorTest {
 
     @Test
     void nonExistentRootDoesNotThrow() throws IOException {
-        new GlobalKiroFolderMonitor(tempDir.resolve("does-not-exist"), () -> { });
+        new KiroFolderMonitor(tempDir.resolve("does-not-exist"), events -> { });
         // No exception means the no-op registration path was taken correctly.
     }
 
@@ -219,7 +222,7 @@ class GlobalKiroFolderMonitorTest {
     void rapidChangesAreDebouncedIntoASingleCallback() throws IOException, InterruptedException {
         CountDownLatch atLeastOne = new CountDownLatch(1);
         AtomicInteger callCount = new AtomicInteger();
-        new GlobalKiroFolderMonitor(tempDir, () -> {
+        new KiroFolderMonitor(tempDir, events -> {
             callCount.incrementAndGet();
             atLeastOne.countDown();
         });
@@ -244,7 +247,7 @@ class GlobalKiroFolderMonitorTest {
         // of these transient bookkeeping files around the real save, none of which are
         // actual content changes worth alerting on.
         CountDownLatch latch = new CountDownLatch(1);
-        new GlobalKiroFolderMonitor(tempDir, latch::countDown);
+        new KiroFolderMonitor(tempDir, events -> latch.countDown());
 
         Files.writeString(tempDir.resolve(artifactName), "transient editor content");
 
@@ -252,5 +255,43 @@ class GlobalKiroFolderMonitorTest {
 
         Files.writeString(tempDir.resolve("mcp.json"), "{}");
         assertTrue(latch.await(20, TimeUnit.SECONDS), "callback should still fire for an unrelated real change");
+    }
+
+    @Test
+    @Timeout(30)
+    void deliversTheChangedPathAndKindToTheCallback() throws IOException, InterruptedException {
+        // Issue #79: the callback used to be a bare Runnable with no data; this confirms the
+        // generalized callback actually delivers the real (path, kind) pair the change-log
+        // feature needs, not just that it still fires.
+        CountDownLatch latch = new CountDownLatch(1);
+        List<KiroFolderMonitor.ChangeEvent> received = new CopyOnWriteArrayList<>();
+        new KiroFolderMonitor(tempDir, events -> {
+            received.addAll(events);
+            latch.countDown();
+        });
+
+        Path mcpJson = tempDir.resolve("mcp.json");
+        Files.writeString(mcpJson, "{}");
+
+        assertTrue(latch.await(20, TimeUnit.SECONDS));
+        assertTrue(received.stream().anyMatch(
+                e -> e.path().equals(mcpJson) && e.kind() == StandardWatchEventKinds.ENTRY_CREATE),
+            "expected a ChangeEvent for " + mcpJson + ", got " + received);
+    }
+
+    @Test
+    @Timeout(30)
+    void closeStopsFurtherCallbacksFromFiring() throws IOException, InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        KiroFolderMonitor monitor = new KiroFolderMonitor(tempDir, events -> latch.countDown());
+
+        monitor.close();
+        // Give the watch thread a moment to actually exit after close() before triggering a
+        // change that would otherwise have fired the callback.
+        Thread.sleep(500);
+
+        Files.writeString(tempDir.resolve("mcp.json"), "{}");
+
+        assertFalse(latch.await(5, TimeUnit.SECONDS), "callback should not fire after close()");
     }
 }

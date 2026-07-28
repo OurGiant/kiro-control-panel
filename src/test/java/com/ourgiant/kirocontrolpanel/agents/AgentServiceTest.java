@@ -1,5 +1,7 @@
 package com.ourgiant.kirocontrolpanel.agents;
 
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
 import com.ourgiant.kirocontrolpanel.util.JsonMapperFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -111,6 +114,28 @@ class AgentServiceTest {
         service.delete(config);
 
         assertFalse(Files.exists(config.getFilePath()));
+    }
+
+    @Test
+    void savingAndDeletingRecordChangeLogEntries() throws IOException {
+        AgentConfig config = new AgentConfig(agentsDir.resolve("logged-agent.json"), workspaceRoot);
+
+        service.save(config);
+        assertEquals(List.of(ChangeKind.CREATED), kindsFor(config.getFilePath()));
+
+        service.save(config);
+        assertEquals(List.of(ChangeKind.CREATED, ChangeKind.MODIFIED), kindsFor(config.getFilePath()));
+
+        service.delete(config);
+        assertEquals(List.of(ChangeKind.CREATED, ChangeKind.MODIFIED, ChangeKind.DELETED), kindsFor(config.getFilePath()));
+    }
+
+    /** Filters the (shared, whole-test-suite) change log down to entries for one specific path, in recorded order. */
+    private static List<ChangeKind> kindsFor(Path path) {
+        return ChangeLogService.loadSince(Instant.EPOCH).reversed().stream()
+            .filter(e -> e.path().equals(path.toAbsolutePath().normalize()))
+            .map(e -> e.kindEnum())
+            .toList();
     }
 
     @Test

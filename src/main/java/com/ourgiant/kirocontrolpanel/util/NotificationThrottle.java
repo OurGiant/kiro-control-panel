@@ -6,7 +6,7 @@ import java.time.Instant;
 /**
  * Rate-limits a disruptive action (e.g. a tray popup) to at most once per cooldown window,
  * separate from whatever unthrottled logging/tracking the caller does around it. Built for
- * {@link GlobalKiroFolderMonitor}'s alert: a single external editing session can trip the
+ * {@link KiroFolderMonitor}'s alert: a single external editing session can trip the
  * monitor several times, each outside its debounce window, and each real change is still
  * worth logging -- but the user shouldn't have to dismiss one popup per event. See #62.
  */

@@ -1,5 +1,8 @@
 package com.ourgiant.kirocontrolpanel.diagnostics;
 
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeSource;
 import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
 
@@ -43,5 +46,7 @@ public final class SkillFileRelocationFix implements Fix {
         SelfWriteTracker.markAboutToWrite(dest);
         Files.move(looseFile, dest);
         GitAutoCommitter.commitIfEnabled(dest);
+        ChangeLogService.record(looseFile, ChangeKind.DELETED, ChangeSource.SELF);
+        ChangeLogService.record(dest, ChangeKind.CREATED, ChangeSource.SELF);
     }
 }

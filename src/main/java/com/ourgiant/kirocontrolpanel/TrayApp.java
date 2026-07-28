@@ -1,11 +1,13 @@
 package com.ourgiant.kirocontrolpanel;
 
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogWatcherManager;
 import com.ourgiant.kirocontrolpanel.diagnostics.Finding;
 import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanDialog;
 import com.ourgiant.kirocontrolpanel.util.AppVersion;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
-import com.ourgiant.kirocontrolpanel.util.GlobalKiroFolderMonitor;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
+import com.ourgiant.kirocontrolpanel.util.KiroFolderMonitor;
 import com.ourgiant.kirocontrolpanel.util.KiroSessionLauncher;
 import com.ourgiant.kirocontrolpanel.util.NotificationThrottle;
 import com.ourgiant.kirocontrolpanel.util.ProcessDetacher;
@@ -22,6 +24,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -89,6 +92,7 @@ public class TrayApp {
         dockReopenSupported = installDockReopenHandler();
         initializeSystemTray();
         startGlobalKiroFolderMonitor();
+        startChangeLog();
         mainWindow.setVisible(true);
         syncWindowPositionWithWindowManager(mainWindow);
 
@@ -223,10 +227,21 @@ public class TrayApp {
      */
     private void startGlobalKiroFolderMonitor() {
         try {
-            new GlobalKiroFolderMonitor(KiroPaths.globalKiroHome(), this::notifyGlobalKiroChanged);
+            new KiroFolderMonitor(KiroPaths.globalKiroHome(), events -> notifyGlobalKiroChanged());
         } catch (IOException e) {
             logger.warn("Failed to start global .kiro folder monitor", e);
         }
+    }
+
+    /**
+     * A second, independent watcher set purely for the change-log feature (issue #79) --
+     * deliberately not reusing the monitor above, so this stays fully isolated from the
+     * existing #50 external-change notification feature. Prunes entries older than the
+     * longest UI filter preset once at startup, since nothing can ever display them anyway.
+     */
+    private void startChangeLog() {
+        ChangeLogService.pruneOlderThan(ZonedDateTime.now().minusMonths(3).toInstant());
+        new ChangeLogWatcherManager(preferences).start();
     }
 
     private void notifyGlobalKiroChanged() {

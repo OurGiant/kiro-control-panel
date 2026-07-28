@@ -1,5 +1,7 @@
 package com.ourgiant.kirocontrolpanel.steering;
 
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -7,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -95,6 +98,29 @@ class SteeringServiceTest {
         service.delete(doc);
 
         assertFalse(Files.exists(doc.getFilePath()));
+    }
+
+    @Test
+    void savingAndDeletingRecordChangeLogEntries() throws IOException {
+        SteeringDoc doc = new SteeringDoc(steeringDir.resolve("tech.md"), workspaceRoot);
+        doc.setBody("# Tech\n");
+
+        service.save(doc);
+        assertEquals(List.of(ChangeKind.CREATED), kindsFor(doc.getFilePath()));
+
+        service.save(doc);
+        assertEquals(List.of(ChangeKind.CREATED, ChangeKind.MODIFIED), kindsFor(doc.getFilePath()));
+
+        service.delete(doc);
+        assertEquals(List.of(ChangeKind.CREATED, ChangeKind.MODIFIED, ChangeKind.DELETED), kindsFor(doc.getFilePath()));
+    }
+
+    /** Filters the (shared, whole-test-suite) change log down to entries for one specific path, in recorded order. */
+    private static List<ChangeKind> kindsFor(Path path) {
+        return ChangeLogService.loadSince(Instant.EPOCH).reversed().stream()
+            .filter(e -> e.path().equals(path.toAbsolutePath().normalize()))
+            .map(e -> e.kindEnum())
+            .toList();
     }
 
     @Test

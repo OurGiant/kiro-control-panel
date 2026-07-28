@@ -1,5 +1,7 @@
 package com.ourgiant.kirocontrolpanel.hooks;
 
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -7,6 +9,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -154,6 +157,31 @@ class HookServiceTest {
 
         assertTrue(rewritten.contains("keep-me"));
         assertTrue(rewritten.contains("keep-me-too"));
+    }
+
+    @Test
+    void creatingModifyingAndDeletingRecordChangeLogEntries() throws IOException {
+        Hook hook = new Hook();
+        hook.setName("logged-hook");
+        hook.setTrigger("file_save");
+        Path filePath = service.createHookFile(workspaceRoot, "logged-hook", hook);
+        assertEquals(List.of(ChangeKind.CREATED), kindsFor(filePath));
+
+        List<HookEntry> entries = service.listWorkspace(workspaceRoot);
+        HookEntry entry = entries.get(0);
+        service.save(entry.getFilePath(), entry.getFile());
+        assertEquals(List.of(ChangeKind.CREATED, ChangeKind.MODIFIED), kindsFor(filePath));
+
+        service.delete(entry);
+        assertEquals(List.of(ChangeKind.CREATED, ChangeKind.MODIFIED, ChangeKind.DELETED), kindsFor(filePath));
+    }
+
+    /** Filters the (shared, whole-test-suite) change log down to entries for one specific path, in recorded order. */
+    private static List<ChangeKind> kindsFor(Path path) {
+        return ChangeLogService.loadSince(Instant.EPOCH).reversed().stream()
+            .filter(e -> e.path().equals(path.toAbsolutePath().normalize()))
+            .map(e -> e.kindEnum())
+            .toList();
     }
 
     @Test

@@ -1,6 +1,9 @@
 package com.ourgiant.kirocontrolpanel.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,12 +84,14 @@ public class RawJsonEditorDialog extends JDialog {
             return;
         }
         try {
+            boolean existedBefore = Files.exists(filePath);
             SelfWriteTracker.markAboutToWrite(filePath.getParent());
             Files.createDirectories(filePath.getParent());
             SelfWriteTracker.markAboutToWrite(filePath);
             Files.writeString(filePath, content);
             logger.info("Saved raw JSON {}", filePath);
             GitAutoCommitter.commitIfEnabled(filePath);
+            ChangeLogService.record(filePath, existedBefore ? ChangeKind.MODIFIED : ChangeKind.CREATED, ChangeSource.SELF);
             saved = true;
             setVisible(false);
         } catch (IOException ex) {

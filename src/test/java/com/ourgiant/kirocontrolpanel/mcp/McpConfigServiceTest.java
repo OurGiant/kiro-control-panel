@@ -1,11 +1,14 @@
 package com.ourgiant.kirocontrolpanel.mcp;
 
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -133,5 +136,27 @@ class McpConfigServiceTest {
         McpConfigFile config = service.load(tempDir.resolve("does-not-exist.json"));
 
         assertTrue(config.getMcpServers().isEmpty());
+    }
+
+    @Test
+    void savingRecordsChangeLogEntries() throws IOException {
+        // Needs a real .kiro/settings/ path -- configPath() (bare tempDir/mcp.json) has no
+        // .kiro segment, so KiroSurface.classify would (correctly) skip it entirely.
+        Path path = tempDir.resolve(".kiro").resolve("settings").resolve("mcp.json");
+        McpConfigFile config = new McpConfigFile();
+
+        service.save(path, config);
+        assertEquals(List.of(ChangeKind.CREATED), kindsFor(path));
+
+        service.save(path, config);
+        assertEquals(List.of(ChangeKind.CREATED, ChangeKind.MODIFIED), kindsFor(path));
+    }
+
+    /** Filters the (shared, whole-test-suite) change log down to entries for one specific path, in recorded order. */
+    private static List<ChangeKind> kindsFor(Path path) {
+        return ChangeLogService.loadSince(Instant.EPOCH).reversed().stream()
+            .filter(e -> e.path().equals(path.toAbsolutePath().normalize()))
+            .map(e -> e.kindEnum())
+            .toList();
     }
 }

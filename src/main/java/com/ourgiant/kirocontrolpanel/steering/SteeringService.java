@@ -1,6 +1,9 @@
 package com.ourgiant.kirocontrolpanel.steering;
 
 import com.ourgiant.kirocontrolpanel.KiroPaths;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeSource;
 import com.ourgiant.kirocontrolpanel.util.FrontMatterParser;
 import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
@@ -69,6 +72,7 @@ public class SteeringService {
 
     public void save(SteeringDoc doc) throws IOException {
         Path filePath = doc.getFilePath();
+        boolean existedBefore = Files.exists(filePath);
         SelfWriteTracker.markAboutToWrite(filePath.getParent());
         Files.createDirectories(filePath.getParent());
 
@@ -95,11 +99,15 @@ public class SteeringService {
         Files.writeString(filePath, content, StandardCharsets.UTF_8);
         logger.info("Saved steering doc {}", filePath);
         GitAutoCommitter.commitIfEnabled(filePath);
+        ChangeLogService.record(filePath, existedBefore ? ChangeKind.MODIFIED : ChangeKind.CREATED, ChangeSource.SELF);
     }
 
     public void delete(SteeringDoc doc) throws IOException {
-        Files.deleteIfExists(doc.getFilePath());
-        logger.info("Deleted steering doc {}", doc.getFilePath());
+        boolean existed = Files.deleteIfExists(doc.getFilePath());
+        if (existed) {
+            logger.info("Deleted steering doc {}", doc.getFilePath());
+            ChangeLogService.record(doc.getFilePath(), ChangeKind.DELETED, ChangeSource.SELF);
+        }
     }
 
     private static String stringOrDefault(Object value, String fallback) {

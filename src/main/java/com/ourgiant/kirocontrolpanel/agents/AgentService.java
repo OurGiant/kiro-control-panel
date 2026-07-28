@@ -3,6 +3,9 @@ package com.ourgiant.kirocontrolpanel.agents;
 import com.fasterxml.jackson.core.PrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeSource;
 import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.JsonMapperFactory;
 import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
@@ -62,16 +65,21 @@ public class AgentService {
 
     public void save(AgentConfig config) throws IOException {
         Path filePath = config.getFilePath();
+        boolean existedBefore = Files.exists(filePath);
         SelfWriteTracker.markAboutToWrite(filePath.getParent());
         Files.createDirectories(filePath.getParent());
         SelfWriteTracker.markAboutToWrite(filePath);
         mapper.writer(prettyPrinter).writeValue(filePath.toFile(), config);
         logger.info("Saved agent config {}", filePath);
         GitAutoCommitter.commitIfEnabled(filePath);
+        ChangeLogService.record(filePath, existedBefore ? ChangeKind.MODIFIED : ChangeKind.CREATED, ChangeSource.SELF);
     }
 
     public void delete(AgentConfig config) throws IOException {
-        Files.deleteIfExists(config.getFilePath());
-        logger.info("Deleted agent config {}", config.getFilePath());
+        boolean existed = Files.deleteIfExists(config.getFilePath());
+        if (existed) {
+            logger.info("Deleted agent config {}", config.getFilePath());
+            ChangeLogService.record(config.getFilePath(), ChangeKind.DELETED, ChangeSource.SELF);
+        }
     }
 }

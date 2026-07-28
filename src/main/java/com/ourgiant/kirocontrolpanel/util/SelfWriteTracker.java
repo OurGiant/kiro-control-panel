@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Tracks files this app just wrote to itself, so {@link GlobalKiroFolderMonitor}
+ * Tracks files this app just wrote to itself, so {@link KiroFolderMonitor}
  * can tell "the user just saved this through Kiro Control Panel's own UI"
  * apart from "something else touched it" and only alert on the latter. See #50.
  * <p>
@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * a fast local write": {@code java.nio.file.WatchService}'s macOS backend
  * polls rather than using native OS events and can take several seconds to
  * deliver a change (see the generous timeouts in DirectoryWatcherTest and
- * GlobalKiroFolderMonitorTest) -- too short a window would let a self-write's
+ * KiroFolderMonitorTest) -- too short a window would let a self-write's
  * own delayed event slip past suppression and notify anyway.
  */
 public final class SelfWriteTracker {
