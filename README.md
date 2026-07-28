@@ -17,24 +17,83 @@ and ruled out for usage/credit tracking.
 
 ## Features
 
-- **MCP Servers**: add/edit/enable/disable/remove entries in `mcp.json`
-  (global and per-workspace), with a Form or Raw JSON editor for each server;
-  a "Browse Catalog..." picker for one-click adding known servers from
-  [kiro.dev's known MCP server list](https://kiro.dev/docs/mcp/servers/)
+### Config management (Global + per-workspace, everywhere)
+
+Every panel below has a Global tab plus one tab per pinned workspace, and
+edits take effect in Kiro (IDE or CLI) immediately, since it's the same
+on-disk files — nothing is synced or duplicated. Pinning a workspace in one
+panel makes it available in every other panel too, and a "Reveal File"
+action on each item opens its real location in the OS file manager.
+
+- **MCP Servers**: add/edit/enable/disable/remove entries in `mcp.json`,
+  with a Form or Raw JSON editor for each server; a "Browse Catalog..."
+  picker for one-click adding known servers from
+  [kiro.dev's known MCP server list](https://kiro.dev/docs/mcp/servers/),
+  with a "Refresh" button that pulls the current list live from GitHub
 - **Steering Docs**: create/edit/delete `.kiro/steering/*.md`, including
-  front-matter inclusion modes (always/fileMatch/manual/auto)
+  front-matter inclusion modes (always/fileMatch/manual/auto), with
+  scaffolded starter content for `product.md`/`tech.md`/`structure.md`
 - **Skills**: create/edit/delete `.kiro/skills/<name>/SKILL.md`, with a
   read-only browser for bundled `scripts/`/`references/`/`assets/`
 - **Hooks**: add/edit/enable/disable/remove workspace hooks across
   `.kiro/hooks/*.json`, with the same Form/Raw JSON editing
 - **Agents**: create/edit/delete `.kiro/agents/*.json` custom agent configs,
   with a Form editor for the common fields and Raw JSON for the rest
-- **Launch kiro-cli...**: opens an independent terminal window (macOS
-  Terminal.app, Windows PowerShell 7, or Ubuntu's GNOME Terminal) running
-  `kiro-cli` in the current scope's directory — the app never reads or
-  drives the session, it's just a launcher
-- **Tray-resident**: minimizes to the system tray instead of exiting; FlatLaf
-  theming (light/dark/IntelliJ themes) under Config > Theme
+
+### Kiro Setup Scan (Help > Scan Kiro Setup...)
+
+Scans MCP/Steering/Skills/Hooks/Agents across Global and every pinned
+workspace for structural problems — invalid JSON/YAML, a stray skill file
+sitting outside its own subfolder, an un-wrapped hooks array, a server or
+hook missing a required field, and more. Mechanically-safe issues (a
+misplaced skill file, a bare hooks array) get a one-click "Fix..." with a
+preview before it's applied; everything else gets an "Edit..." button that
+opens the real in-app editor for that item — never an external app, so the
+fix stays under this app's own tracking. "Rescan" refreshes the list after
+fixing something. Runs silently on first launch (only shows up if it finds
+something) and on demand any time afterward.
+
+### Change Log (Help > View Change Log...)
+
+Tracks every change to Kiro-managed files — both edits made through this
+app and ones detected from outside it (Kiro IDE, hand-editing, another
+process) — across Global and every pinned workspace, filterable by preset
+time range (1 day / 1 week / 2 weeks / 1 month / 3 months).
+
+### External change monitoring
+
+Detects changes to `~/.kiro` made from outside the app and shows a tray
+notification — since Kiro reads everything under there as instructions,
+this also guards against adversarial poisoning of steering/skills/agents
+content, not just accidental drift. `File > Pause Change Alerts` for a
+one-off pause; a persistent on/off toggle lives in Settings.
+
+### Optional git audit trail (File > Settings > Git)
+
+"Track ~/.kiro Changes with Git" auto-commits every app-driven write under
+the global `~/.kiro` tree to a local git repo, turning it into a
+self-maintaining, revertible history you can inspect with git directly —
+no in-app version browser needed.
+
+### Launch kiro-cli... (every scope bar, and the tray icon menu)
+
+Opens an independent terminal window (macOS Terminal.app, Windows
+PowerShell 7, or Ubuntu's GNOME Terminal) running `kiro-cli` in the
+current scope's directory — the app never reads or drives the session,
+it's just a launcher.
+
+### The app itself
+
+- **Tray-resident**: minimizes to the system tray instead of exiting
+- **Theming**: FlatLaf light/dark/IntelliJ themes via `File > Settings`
+- **First-run welcome dialog** explaining the core "edits Kiro's own files"
+  idea and tray-first UX
+- **Help > View Logs...**: live-tailing view of the app's own log file
+- **Help > About**: version display plus an update check against the
+  latest GitHub release
+- **Native installers** for Windows, macOS, and Linux (`.deb`/`.rpm`) via
+  `jpackage`, with proper Linux desktop integration (app-menu entry,
+  taskbar icon, `kiro-control-panel` on `PATH`)
 
 Usage/credit tracking is intentionally not implemented — see SPEC.md's
 Non-goals section for why.
@@ -85,9 +144,13 @@ src/main/java/com/ourgiant/kirocontrolpanel/
 ├── steering/                 # Steering doc management (steering/*.md)
 ├── skills/                   # Skill management (skills/<name>/SKILL.md)
 ├── hooks/                    # Hook management (hooks/*.json)
+├── agents/                   # Agent config management (agents/*.json)
+├── diagnostics/              # Kiro Setup Scan (structural checks + fixes)
+├── changelog/                # Change Log viewer + external-change watchers
 ├── usage/                    # Static placeholder — see SPEC.md
 └── util/                     # FrontMatterParser, JsonMapperFactory,
-                               # WorkspaceScopeBar, RawJsonEditorDialog, IconFactory
+                               # WorkspaceScopeBar, RawJsonEditorDialog, IconFactory,
+                               # GitAutoCommitter, KiroFolderMonitor, KiroSessionLauncher
 ```
 
 ## Dependencies
