@@ -41,29 +41,4 @@ public final class DesktopUtils {
                 "Failed to open: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
-
-    /** Opens {@code path} itself in its OS-associated default app (e.g. a text editor for .json/.md), rather than revealing its containing folder. */
-    public static void openFile(Component parent, Path path) {
-        if (path == null) {
-            return;
-        }
-        if (!Files.exists(path)) {
-            JOptionPane.showMessageDialog(parent,
-                "That file doesn't exist yet:\n" + path, "Not Found", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
-            JOptionPane.showMessageDialog(parent,
-                "Opening a file isn't supported on this platform.\nLocation: " + path,
-                "Not Supported", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-        try {
-            Desktop.getDesktop().open(path.toFile());
-        } catch (IOException e) {
-            logger.warn("Failed to open {}", path, e);
-            JOptionPane.showMessageDialog(parent,
-                "Failed to open: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
 }

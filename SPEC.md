@@ -1018,3 +1018,77 @@ sequences directory-then-file operations with explicit waits between them
 for exactly this reason), not a regression introduced here.
 
 242 tests total.
+
+## Route "Open File" through in-app editors (issue #82)
+
+A real anti-pattern caught after #78/#79 shipped: both the setup-scan
+findings panel and the change-log panel had an "Open File" button that
+shelled out to the OS default external editor via `DesktopUtils.openFile`
+(`Desktop.getDesktop().open(...)`) — meaning any fix made there happened
+in a process this app never sees, bypassing `SelfWriteTracker`,
+`GitAutoCommitter`, and `ChangeLogService` entirely. For an app whose
+entire value proposition is "it edits Kiro's files under its own view,"
+that's a real bug, not a nitpick.
+
+**Both `Finding` (#78) and `ChangeLogEntry` (#79) already carried exactly
+the classification a launcher needs** — surface and scope — so neither
+panel needed new resolution logic, just a different destination for a
+click. New `util/InAppFileEditorLauncher` dispatches on `KiroSurface`:
+
+- **Steering/Skills** are naturally one-file-per-item and their editors
+  (`SteeringEditorDialog`/`SkillEditorDialog`) self-persist — a clean fit
+  once the domain object loads. A loose (`.md`-not-`SKILL.md`, pre-#78-fix)
+  skill file, or a file that fails to load structurally (an `INVALID`
+  finding — broken YAML/JSON), falls back to a generic raw-text editor.
+- **Agents** loads/opens the same way, but `AgentEditDialog` does **not**
+  self-persist (confirmed both by reading the class and by a real bug the
+  first verification pass caught — see below) — the launcher must call
+  `agentService.save(config)` itself after `dialog.isSaved()`, exactly
+  mirroring `AgentsPanel`'s own `onEdit()`/`persistThenReload()`.
+- **Hooks/MCP** have a genuine granularity mismatch (one file can hold
+  many hooks; one `mcp.json` holds many servers) that a bare `Path` can't
+  resolve on its own. Hooks tries to resolve the single matching
+  `HookEntry` (`resolveHookEntry`, extracted as small/pure/tested logic);
+  zero or multiple matches falls back to the raw editor. MCP always falls
+  back to the raw editor — there's no faithful per-file structured
+  equivalent, matching what `McpPanel` itself already falls back to for
+  the same reason.
+- Both fallback paths reuse `util/RawJsonEditorDialog` — already used by
+  the MCP/Hooks panels' own "raw JSON" escape hatch, and already wired
+  into `SelfWriteTracker`/`GitAutoCommitter`/`ChangeLogService` from #79 —
+  rather than building anything new. It previously hardcoded JSON
+  validation unconditionally; generalized with a 5th, backward-compatible
+  constructor parameter (`validateAsJson`, defaulting to `true` via
+  constructor delegation) so Steering/Skills' non-JSON fallback case can
+  skip it, with zero behavior change at either existing call site.
+
+**A real bug, caught only by driving the actual dialogs, not by reasoning
+about the code**: the first end-to-end verification pass reported the
+Agents case's file as never rewritten, even though `AgentEditDialog`
+closed normally after Save. Root cause was in the *verification harness*,
+not the product: `JDialog.isVisible()` flips to `false` inside `onSave()`
+slightly before the EDT actually unwinds back to the launcher's own
+post-dialog `agentService.save(config)` call (since `AgentEditDialog`
+doesn't self-persist) — the harness read the file's mtime a few hundred
+milliseconds too early. Confirmed via `stat` against the real file and
+`app.log`'s own "Saved agent config" line, both timestamped correctly
+*after* the harness's premature check — the actual save path was already
+correct; the harness needed a short settle delay after the dialog closes
+before checking the file, same category of caution this project's own
+`verify-java-swing` skill already calls out for asynchronous UI actions.
+
+`DesktopUtils.openFile` (added in #78 for exactly this button, now with
+zero remaining call sites) removed rather than left as dead code;
+`revealInFileManager` (used by every panel's "Reveal File" action) is
+unaffected.
+
+**Verified end-to-end on the host**, not just unit-tested: a driven-UI
+harness ran all seven surface/ambiguity combinations (Steering valid,
+Steering invalid → raw fallback, Skills valid, Agents, Hooks resolvable
+to one entry, Hooks ambiguous → raw fallback, MCP → always raw) against
+real fixture files, clicking each dialog's real Save button and
+confirming both the file was actually rewritten and the resulting
+`ChangeLogService` entry was recorded as `SELF`, never `EXTERNAL` — the
+concrete proof this fix actually closes the gap it set out to close.
+
+245 tests total.

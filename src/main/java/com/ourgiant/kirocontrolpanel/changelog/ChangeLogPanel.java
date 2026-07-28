@@ -1,10 +1,12 @@
 package com.ourgiant.kirocontrolpanel.changelog;
 
-import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
+import com.ourgiant.kirocontrolpanel.WorkspaceScope;
+import com.ourgiant.kirocontrolpanel.util.InAppFileEditorLauncher;
 import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
 
 import javax.swing.*;
 import java.awt.*;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -45,7 +47,7 @@ public class ChangeLogPanel extends JPanel {
         });
         add(new JScrollPane(table), BorderLayout.CENTER);
 
-        openFileButton = new JButton("Open File");
+        openFileButton = new JButton("Edit...");
         openFileButton.setEnabled(false);
         openFileButton.addActionListener(e -> onOpenFile());
         add(SwingLayoutUtils.createVerticalButtonPanel(openFileButton), BorderLayout.EAST);
@@ -87,7 +89,12 @@ public class ChangeLogPanel extends JPanel {
     private void onOpenFile() {
         int row = table.getSelectedRow();
         if (row >= 0) {
-            DesktopUtils.openFile(this, tableModel.entryAt(row).path());
+            ChangeLogEntry entry = tableModel.entryAt(row);
+            WorkspaceScope scope = entry.global()
+                ? WorkspaceScope.global()
+                : new WorkspaceScope(entry.scopeLabel(), Paths.get(entry.scopeLabel()));
+            InAppFileEditorLauncher.open((Frame) SwingUtilities.getWindowAncestor(this),
+                entry.surfaceEnum(), scope, entry.path());
         }
     }
 

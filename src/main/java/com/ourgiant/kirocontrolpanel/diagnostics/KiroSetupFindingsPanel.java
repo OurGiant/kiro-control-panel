@@ -1,6 +1,6 @@
 package com.ourgiant.kirocontrolpanel.diagnostics;
 
-import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
+import com.ourgiant.kirocontrolpanel.util.InAppFileEditorLauncher;
 import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +43,7 @@ public class KiroSetupFindingsPanel extends JPanel {
         });
         add(new JScrollPane(findingList), BorderLayout.CENTER);
 
-        openFileButton = new JButton("Open File");
+        openFileButton = new JButton("Edit...");
         openFileButton.addActionListener(e -> onOpenFile());
 
         fixButton = new JButton("Fix...");
@@ -99,7 +99,8 @@ public class KiroSetupFindingsPanel extends JPanel {
     private void onOpenFile() {
         Finding selected = findingList.getSelectedValue();
         if (selected != null) {
-            DesktopUtils.openFile(this, selected.path());
+            InAppFileEditorLauncher.open((Frame) SwingUtilities.getWindowAncestor(this),
+                selected.surface(), selected.scope(), selected.path());
         }
     }
 
