@@ -1,5 +1,11 @@
 # Kiro Control Panel
 
+[![Build](https://github.com/OurGiant/kiro-control-panel/actions/workflows/build.yml/badge.svg)](https://github.com/OurGiant/kiro-control-panel/actions/workflows/build.yml)
+[![Latest Release](https://img.shields.io/github/v/release/OurGiant/kiro-control-panel?label=Release)](https://github.com/OurGiant/kiro-control-panel/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/OurGiant/kiro-control-panel)](LICENSE)
+[![Java 24](https://img.shields.io/badge/Java-24-orange?logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Platforms](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue)](#installation)
+
 A Java Swing system-tray app that gives CLI-only [Kiro](https://kiro.dev) users
 the same MCP server, steering doc, skill, hook, and agent management the IDE
 builds in — without needing the IDE. It reads and writes the exact files Kiro
