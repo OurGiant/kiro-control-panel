@@ -19,7 +19,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
+import java.awt.Component;
+import java.awt.Dialog;
 import java.awt.Frame;
+import java.awt.Window;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
@@ -48,6 +52,26 @@ public final class InAppFileEditorLauncher {
     private static final String HOOKS_DEFAULT_CONTENT = "{\n  \"version\": \"v1\",\n  \"hooks\": []\n}\n";
 
     private InAppFileEditorLauncher() {
+    }
+
+    /**
+     * Resolves the real top-level {@code Frame} for a component, even when its immediate
+     * window ancestor is a {@code Dialog} (e.g. a panel embedded in {@code KiroSetupScanDialog}
+     * or {@code ChangeLogDialog}, both non-modal dialogs owned by {@code MainWindow} -- their
+     * own {@code getOwner()} is already that real Frame). {@code SwingUtilities
+     * .getWindowAncestor(component)} alone only returns the *immediate* enclosing window, which
+     * is that Dialog itself, not Frame -- callers that naively cast it directly hit a real
+     * {@code ClassCastException} (see issue #82's fix-up).
+     */
+    public static Frame resolveFrame(Component component) {
+        Window window = SwingUtilities.getWindowAncestor(component);
+        if (window instanceof Frame frame) {
+            return frame;
+        }
+        if (window instanceof Dialog dialog && dialog.getOwner() instanceof Frame frame) {
+            return frame;
+        }
+        return null;
     }
 
     public static void open(Frame parent, KiroSurface surface, WorkspaceScope scope, Path path) {
