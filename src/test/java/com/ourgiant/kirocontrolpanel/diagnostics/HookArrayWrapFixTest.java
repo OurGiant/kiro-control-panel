@@ -1,6 +1,8 @@
 package com.ourgiant.kirocontrolpanel.diagnostics;
 
 import com.ourgiant.kirocontrolpanel.WorkspaceScope;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
 import com.ourgiant.kirocontrolpanel.hooks.Hook;
 import com.ourgiant.kirocontrolpanel.hooks.HookAction;
 import com.ourgiant.kirocontrolpanel.hooks.HookService;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,5 +68,21 @@ class HookArrayWrapFixTest {
         before.get(0).fix().apply();
 
         assertTrue(scanner.scanHooks(scope).isEmpty());
+    }
+
+    @Test
+    void applyRecordsAChangeLogEntry() throws IOException {
+        Path hooksDir = workspaceRoot.resolve(".kiro").resolve("hooks");
+        Files.createDirectories(hooksDir);
+        Path path = hooksDir.resolve("bare.json");
+        Files.writeString(path, """
+            [ { "name": "lint", "trigger": "file_save", "action": { "type": "command", "command": "echo hi" } } ]
+            """);
+
+        new HookArrayWrapFix(path, List.of(), new HookService()).apply();
+
+        boolean recorded = ChangeLogService.loadSince(Instant.EPOCH).stream()
+            .anyMatch(e -> e.path().equals(path.toAbsolutePath().normalize()) && e.kindEnum() == ChangeKind.MODIFIED);
+        assertTrue(recorded, "expected a MODIFIED change-log entry for " + path);
     }
 }

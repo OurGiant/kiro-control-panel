@@ -7,7 +7,7 @@
 
     <groupId>com.ourgiant</groupId>
     <artifactId>kiro-control-panel</artifactId>
-    <version>1.3.3</version>
+    <version>1.3.4</version>
     <packaging>jar</packaging>
 
     <name>Kiro Control Panel</name>
@@ -119,6 +119,15 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.2</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <!-- Without this, every test that saves/deletes through a service would
+                             append into the real user's real change log (issue #79) on every test
+                             run, since recording isn't gated behind an opt-in preference the way
+                             GitAutoCommitter's git tracking is. See ChangeLogService.defaultLogFile. -->
+                        <kiro.control.panel.changeLogFile>${project.build.directory}/test-change-log.jsonl</kiro.control.panel.changeLogFile>
+                    </systemPropertyVariables>
+                </configuration>
             </plugin>
 
             <plugin>

@@ -3,6 +3,9 @@ package com.ourgiant.kirocontrolpanel.mcp;
 import com.fasterxml.jackson.core.PrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeSource;
 import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.JsonMapperFactory;
 import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
@@ -53,11 +56,13 @@ public class McpConfigService {
     }
 
     public void save(Path path, McpConfigFile config) throws IOException {
+        boolean existedBefore = Files.exists(path);
         SelfWriteTracker.markAboutToWrite(path.getParent());
         Files.createDirectories(path.getParent());
         SelfWriteTracker.markAboutToWrite(path);
         mapper.writer(prettyPrinter).writeValue(path.toFile(), config);
         logger.info("Saved MCP config {}", path);
         GitAutoCommitter.commitIfEnabled(path);
+        ChangeLogService.record(path, existedBefore ? ChangeKind.MODIFIED : ChangeKind.CREATED, ChangeSource.SELF);
     }
 }

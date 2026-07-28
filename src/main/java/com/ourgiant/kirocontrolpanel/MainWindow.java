@@ -1,6 +1,7 @@
 package com.ourgiant.kirocontrolpanel;
 
 import com.ourgiant.kirocontrolpanel.agents.AgentsPanel;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogDialog;
 import com.ourgiant.kirocontrolpanel.diagnostics.Finding;
 import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanDialog;
 import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanner;
@@ -114,6 +115,10 @@ public class MainWindow extends JFrame {
         JMenuItem scanSetupItem = new JMenuItem("Scan Kiro Setup...");
         scanSetupItem.addActionListener(e -> runSetupScan());
         helpMenu.add(scanSetupItem);
+
+        JMenuItem changeLogItem = new JMenuItem("View Change Log...");
+        changeLogItem.addActionListener(e -> new ChangeLogDialog(this).setVisible(true));
+        helpMenu.add(changeLogItem);
 
         helpMenu.addSeparator();
 

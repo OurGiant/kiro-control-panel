@@ -918,3 +918,103 @@ triggers an error `JOptionPane`) isn't unit tested, same
 elsewhere in this app.
 
 208 tests total.
+
+## Change log viewer (issue #79)
+
+A window listing changes to Kiro-managed files (file, timestamp, scope,
+surface, created/modified/deleted, self vs. external), filterable by
+preset time range (1 day/1 week/2 weeks/1 month/3 months). The issue
+itself suggested a local sqlite database; after conversation with the
+user, persistence instead is a plain append-only JSON-lines file
+(`~/.kiro-control-panel/change-log.jsonl`, new `changelog` package) —
+consistent with SPEC's existing documented decision not to carry
+`sqlite-jdbc` into this app for pure file-management concerns, and
+Jackson (already a dependency) round-trips the format with zero custom
+serializers.
+
+**Nothing durable enough already existed to build this on top of**,
+confirmed by research before designing: `GitAutoCommitter`'s git history
+is real change data but global-only and opt-in (off by default);
+`GlobalKiroFolderMonitor` already detected external changes with exactly
+the right per-file data, but only for the global root, only logged
+unstructured text to `app.log` (7-day rotation, already short of the
+issue's "3 months" preset), and discarded the changed-path data right
+after logging it; `DirectoryWatcher` retains no data at all by design.
+
+**The one real architectural move**: generalizing `GlobalKiroFolderMonitor`
+(renamed `util/KiroFolderMonitor`) to run against any root, not just the
+fixed global one, so a second instance can watch each pinned workspace too.
+This is a mature, tested (19 tests), security-relevant class — its Javadoc
+explicitly frames it as detecting adversarial poisoning of steering/skills/
+agents content (#50) — so this wasn't done lightly: verified first that
+every existing test already constructs it against an arbitrary `@TempDir`
+root (nothing hardcoded "global") and none assert on callback payload, so
+generalizing the root and enriching the callback from a bare `Runnable` to
+one delivering the actual changed `(path, kind)` pairs was a mechanical,
+low-risk change (19 lambda-wrapper updates, zero assertion changes) rather
+than a redesign. A `close()` method was added too — a confirmed, genuine
+gap: neither this class nor `DirectoryWatcher` had any shutdown path before
+now, fine when there was exactly one fixed-lifetime instance, not fine once
+instances come and go per pinned/unpinned workspace.
+
+**`ChangeLogWatcherManager`** owns a second, fully independent set of
+`KiroFolderMonitor` instances purely for this feature (global + one per
+pinned workspace, kept in sync by diffing `AppPreferences.getWorkspaces()`
+against what was last seen, since `WorkspaceRegistry`'s "something changed"
+broadcast carries no payload) — deliberately not reusing `TrayApp`'s
+existing global monitor (#50's notification feature), trading one extra
+thread/`WatchService` watching the global tree twice for complete isolation
+from that already-tested, security-relevant feature.
+
+**Self-writes are recorded at each service's actual write chokepoint** —
+one line next to the existing `SelfWriteTracker.markAboutToWrite` call
+already there, in `McpConfigService.save`, `SteeringService.save/delete`,
+`SkillService.save/delete`, `HookService.save`/the delete-branch of
+`delete`, `AgentService.save/delete`, plus `RawJsonEditorDialog.onSave`
+(the one write path that bypasses the service layer entirely — confirmed
+via research to be the single gap a services-only hook would miss) and
+issue #78's `SkillFileRelocationFix`/`HookArrayWrapFix` (the latter gets
+covered for free since it already routes through `HookService.save`).
+`KiroSurface` (from #78) gained a `classify(Path)` helper — the single
+source of truth for "which surface does this path belong to," reused by
+both the self-write call sites and the external-change watcher, rather
+than each guessing independently.
+
+**A real, only-caught-by-running-it correctness bug**: recording isn't
+gated behind an opt-in preference the way `GitAutoCommitter`'s git tracking
+is (deliberately always-on, matching `app.log`'s own precedent) — which
+means, unguarded, *every* existing test in this project's whole suite that
+saves/deletes through a service would have appended into the real user's
+real `~/.kiro-control-panel/change-log.jsonl` on every single `mvn test`
+run. Fixed by giving `ChangeLogService.defaultLogFile()` a system-property
+override (`kiro.control.panel.changeLogFile`), wired to a
+build-directory-relative path via `pom.xml`'s surefire config — the same
+class of fix `KIRO_HOME` already provides for `KiroPaths`, just newly
+needed here since nothing else in this app writes real, un-gated user data
+from inside `save()`/`delete()` itself.
+
+**UI mirrors established precedent exactly**: `ChangeLogPanel` (plain
+`JPanel` — filter combo, table, Open File button reusing #78's
+`DesktopUtils.openFile`) is unit-testable headlessly, wrapped by thin,
+untested `ChangeLogDialog` chrome, copying `LogViewerDialog`'s exact
+non-modal/`WindowAdapter`-gated-`Timer`/skip-reload-if-unchanged template
+verbatim. Scanning/loading is synchronous, not `SwingWorker`-backed — same
+reasoning as #78: local file I/O is already how every panel in this app
+works, `SwingWorker` here is reserved for genuine network calls.
+
+**Verified end-to-end on the host**, not just unit-tested: a driven-UI
+harness saved a real steering doc through the real `SteeringService`,
+made a real external file change picked up by a real `KiroFolderMonitor`
+thread, confirmed `close()` genuinely stops further recording, then drove
+the actual `ChangeLogDialog` (filter combo, table row count, Open File
+button) against both entries — the strongest available proof this reaches
+end-to-end through real threads and real timing, not simulated. Also
+confirmed, mid-verification, that a bare directory-creation event racing
+a file-write immediately inside it can land in the same debounce batch as
+the directory itself (recording the directory's own creation rather than
+the file written a moment later) — a known, pre-existing characteristic
+of the recursive-watch-registration approach (the original test suite
+sequences directory-then-file operations with explicit waits between them
+for exactly this reason), not a regression introduced here.
+
+242 tests total.

@@ -20,11 +20,11 @@ import java.util.concurrent.TimeUnit;
  * trail the user can inspect/revert with git directly -- no in-app version
  * browser, that's what git itself is for. Only ever runs {@code git add} on
  * the exact file just written, deliberately never {@code -A}: an
- * <em>external</em> change (the exact thing {@link GlobalKiroFolderMonitor}
+ * <em>external</em> change (the exact thing {@link KiroFolderMonitor}
  * flags) should stay visible as an uncommitted diff, not get silently swept
  * into an unrelated "Update X" commit. See #49.
  * <p>
- * Global-only, matching {@link GlobalKiroFolderMonitor}/#50: a workspace's
+ * Global-only, matching {@link KiroFolderMonitor}/#50: a workspace's
  * {@code .kiro} folder usually lives inside the user's own project repo, and
  * git-init'ing a nested repo there would confuse that repo's own
  * {@code git add .} (silently skipped as an embedded repo, or recorded as a

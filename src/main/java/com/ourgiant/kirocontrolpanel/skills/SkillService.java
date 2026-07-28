@@ -1,6 +1,9 @@
 package com.ourgiant.kirocontrolpanel.skills;
 
 import com.ourgiant.kirocontrolpanel.KiroPaths;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeSource;
 import com.ourgiant.kirocontrolpanel.util.FrontMatterParser;
 import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
@@ -75,6 +78,7 @@ public class SkillService {
     }
 
     public void save(Skill skill) throws IOException {
+        boolean existedBefore = Files.exists(skill.getSkillMdPath());
         // Mark the skill's own directory before creating it: every skill lives in its own
         // directory, so this is a real ENTRY_CREATE event on every new skill, not an edge case.
         SelfWriteTracker.markAboutToWrite(skill.getSkillDir());
@@ -90,11 +94,17 @@ public class SkillService {
         Files.writeString(skill.getSkillMdPath(), content, StandardCharsets.UTF_8);
         logger.info("Saved skill {}", skill.getSkillMdPath());
         GitAutoCommitter.commitIfEnabled(skill.getSkillMdPath());
+        ChangeLogService.record(skill.getSkillMdPath(),
+            existedBefore ? ChangeKind.MODIFIED : ChangeKind.CREATED, ChangeSource.SELF);
     }
 
     public void delete(Skill skill) throws IOException {
+        boolean existed = Files.exists(skill.getSkillDir());
         deleteRecursively(skill.getSkillDir());
-        logger.info("Deleted skill {}", skill.getSkillDir());
+        if (existed) {
+            logger.info("Deleted skill {}", skill.getSkillDir());
+            ChangeLogService.record(skill.getSkillMdPath(), ChangeKind.DELETED, ChangeSource.SELF);
+        }
     }
 
     private static void deleteRecursively(Path dir) throws IOException {

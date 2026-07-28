@@ -3,6 +3,9 @@ package com.ourgiant.kirocontrolpanel.hooks;
 import com.fasterxml.jackson.core.PrettyPrinter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeSource;
 import com.ourgiant.kirocontrolpanel.util.JsonMapperFactory;
 import com.ourgiant.kirocontrolpanel.util.SelfWriteTracker;
 import org.slf4j.Logger;
@@ -54,11 +57,13 @@ public class HookService {
     }
 
     public void save(Path filePath, HookFile file) throws IOException {
+        boolean existedBefore = Files.exists(filePath);
         SelfWriteTracker.markAboutToWrite(filePath.getParent());
         Files.createDirectories(filePath.getParent());
         SelfWriteTracker.markAboutToWrite(filePath);
         mapper.writer(prettyPrinter).writeValue(filePath.toFile(), file);
         logger.info("Saved hooks file {}", filePath);
+        ChangeLogService.record(filePath, existedBefore ? ChangeKind.MODIFIED : ChangeKind.CREATED, ChangeSource.SELF);
     }
 
     /** Creates a new single-hook file, e.g. for the Hooks panel's "Add..." action. */
@@ -74,8 +79,11 @@ public class HookService {
     public void delete(HookEntry entry) throws IOException {
         entry.getFile().getHooks().remove(entry.getHook());
         if (entry.getFile().getHooks().isEmpty()) {
-            Files.deleteIfExists(entry.getFilePath());
-            logger.info("Deleted empty hooks file {}", entry.getFilePath());
+            boolean existed = Files.deleteIfExists(entry.getFilePath());
+            if (existed) {
+                logger.info("Deleted empty hooks file {}", entry.getFilePath());
+                ChangeLogService.record(entry.getFilePath(), ChangeKind.DELETED, ChangeSource.SELF);
+            }
         } else {
             save(entry.getFilePath(), entry.getFile());
         }

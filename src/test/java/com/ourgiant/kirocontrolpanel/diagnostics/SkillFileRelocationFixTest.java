@@ -1,12 +1,16 @@
 package com.ourgiant.kirocontrolpanel.diagnostics;
 
 import com.ourgiant.kirocontrolpanel.WorkspaceScope;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogEntry;
+import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -74,5 +78,22 @@ class SkillFileRelocationFixTest {
 
         assertThrows(IOException.class, () -> new SkillFileRelocationFix(looseFile).apply());
         assertEquals("existing content", Files.readString(existingSkillDir.resolve("SKILL.md")));
+    }
+
+    @Test
+    void applyRecordsDeletedAndCreatedChangeLogEntries() throws IOException {
+        Path skillsDir = workspaceRoot.resolve(".kiro").resolve("skills");
+        Files.createDirectories(skillsDir);
+        Path looseFile = skillsDir.resolve("my-skill.md");
+        Files.writeString(looseFile, "---\nname: my-skill\ndescription: d\n---\nBody\n");
+        Path relocated = skillsDir.resolve("my-skill").resolve("SKILL.md");
+
+        new SkillFileRelocationFix(looseFile).apply();
+
+        List<ChangeLogEntry> entries = ChangeLogService.loadSince(Instant.EPOCH);
+        assertTrue(entries.stream().anyMatch(
+            e -> e.path().equals(looseFile.toAbsolutePath().normalize()) && e.kindEnum() == ChangeKind.DELETED));
+        assertTrue(entries.stream().anyMatch(
+            e -> e.path().equals(relocated.toAbsolutePath().normalize()) && e.kindEnum() == ChangeKind.CREATED));
     }
 }
