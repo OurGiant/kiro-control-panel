@@ -114,7 +114,7 @@ public class TrayApp {
     private void runFirstRunSetupScan() {
         List<Finding> findings = MainWindow.scanForFindings(preferences);
         if (!findings.isEmpty()) {
-            new KiroSetupScanDialog(mainWindow, findings).setVisible(true);
+            new KiroSetupScanDialog(mainWindow, findings, () -> MainWindow.scanForFindings(preferences)).setVisible(true);
         }
     }
 

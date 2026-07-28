@@ -28,6 +28,7 @@ public class KiroSetupFindingsPanel extends JPanel {
     private final JLabel statusLabel = new JLabel(" ");
     private final JButton openFileButton;
     private final JButton fixButton;
+    private final JButton rescanButton;
 
     public KiroSetupFindingsPanel() {
         super(new BorderLayout(8, 8));
@@ -49,7 +50,9 @@ public class KiroSetupFindingsPanel extends JPanel {
         fixButton = new JButton("Fix...");
         fixButton.addActionListener(e -> onFix());
 
-        add(SwingLayoutUtils.createVerticalButtonPanel(openFileButton, fixButton), BorderLayout.EAST);
+        rescanButton = new JButton("Rescan");
+
+        add(SwingLayoutUtils.createVerticalButtonPanel(openFileButton, fixButton, rescanButton), BorderLayout.EAST);
 
         setFindings(List.of());
     }
@@ -61,6 +64,11 @@ public class KiroSetupFindingsPanel extends JPanel {
         }
         updateStatusText();
         updateButtonState();
+    }
+
+    /** Fires whenever "Rescan" is clicked -- the caller re-runs the scan and calls {@link #setFindings}. */
+    public void addRescanListener(Runnable listener) {
+        rescanButton.addActionListener(e -> listener.run());
     }
 
     /** Package-private, for tests: the panel's current finding list. */
@@ -76,6 +84,11 @@ public class KiroSetupFindingsPanel extends JPanel {
     /** Package-private, for tests. */
     JButton getFixButton() {
         return fixButton;
+    }
+
+    /** Package-private, for tests. */
+    JButton getRescanButton() {
+        return rescanButton;
     }
 
     /** Package-private, for tests. */
