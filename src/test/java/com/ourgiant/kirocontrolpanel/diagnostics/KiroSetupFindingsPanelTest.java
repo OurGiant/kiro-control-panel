@@ -41,6 +41,35 @@ class KiroSetupFindingsPanelTest {
         assertTrue(panel.getFindings().isEmpty());
         assertFalse(panel.getOpenFileButton().isEnabled());
         assertFalse(panel.getFixButton().isEnabled());
+        assertTrue(panel.getRescanButton().isEnabled(), "Rescan should always be available, regardless of selection");
+    }
+
+    @Test
+    void rescanButtonStaysEnabledRegardlessOfSelection() {
+        KiroSetupFindingsPanel panel = new KiroSetupFindingsPanel();
+        Finding finding = notFixable();
+        panel.setFindings(List.of(finding));
+
+        assertTrue(panel.getRescanButton().isEnabled());
+        panel.selectFinding(finding);
+        assertTrue(panel.getRescanButton().isEnabled());
+    }
+
+    @Test
+    void clickingRescanInvokesTheRegisteredListenerAndRefreshesFindings() {
+        KiroSetupFindingsPanel panel = new KiroSetupFindingsPanel();
+        Finding stale = notFixable();
+        panel.setFindings(List.of(stale));
+        AtomicBoolean rescanned = new AtomicBoolean(false);
+        panel.addRescanListener(() -> {
+            rescanned.set(true);
+            panel.setFindings(List.of());
+        });
+
+        panel.getRescanButton().doClick();
+
+        assertTrue(rescanned.get());
+        assertTrue(panel.getFindings().isEmpty(), "rescan should have replaced the stale finding list");
     }
 
     @Test

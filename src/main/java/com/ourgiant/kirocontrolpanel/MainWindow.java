@@ -130,7 +130,7 @@ public class MainWindow extends JFrame {
     }
 
     private void runSetupScan() {
-        new KiroSetupScanDialog(this, scanForFindings(preferences)).setVisible(true);
+        new KiroSetupScanDialog(this, scanForFindings(preferences), () -> scanForFindings(preferences)).setVisible(true);
     }
 
     /** Also used by TrayApp for the silent first-run scan. */

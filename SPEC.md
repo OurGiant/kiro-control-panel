@@ -1120,3 +1120,39 @@ windows are nested, which is exactly why `mvn test` couldn't have caught
 it and real on-host verification was the only way to.
 
 245 tests total.
+
+## Rescan button in the Kiro Setup Scan window (issue #86)
+
+`KiroSetupScanDialog`'s findings only ever reflected a single scan taken
+at the moment it opened. "Fix..." already removed a finding from the list
+directly when applied, but nothing refreshed the list otherwise — in
+particular, resolving a finding by hand through "Edit..." (#82/#84) left
+the now-stale finding sitting in the list until the dialog was closed and
+reopened.
+
+A "Rescan" button, added to `KiroSetupFindingsPanel`'s existing button
+rail alongside "Edit..."/"Fix...", always stays enabled regardless of
+selection (unlike those two, it isn't a per-item action) and fires a new
+`addRescanListener(Runnable)` callback — the same
+callback-registration shape `ChangeLogPanel.addFilterChangeListener`
+already established for "the panel doesn't own I/O, the dialog does."
+`KiroSetupScanDialog` gained a third constructor parameter,
+`Supplier<List<Finding>> rescanner`, and wires
+`panel.addRescanListener(() -> panel.setFindings(rescanner.get()))` --
+both existing call sites (`MainWindow`'s Help-menu action,
+`TrayApp`'s first-run silent scan) already had `AppPreferences`/
+`MainWindow.scanForFindings` in scope, so passing `() ->
+scanForFindings(preferences)` as the rescanner needed no new plumbing.
+
+**Verified through the real dialog hierarchy, not a shortcut** — directly
+applying the lesson from #84's regression (a harness that calls internals
+directly with hand-supplied arguments can miss real wiring bugs): a
+driven-UI harness built a real fixture with one structural MCP finding,
+opened the actual `KiroSetupScanDialog`, confirmed the finding showed,
+fixed the underlying file externally (simulating a hand-edit through
+"Edit..."), clicked the dialog's real "Rescan" button, and confirmed the
+now-resolved finding was gone from the list — proof the button actually
+re-invokes the scanner and refreshes the panel, not just that the wiring
+compiles.
+
+247 tests total.
