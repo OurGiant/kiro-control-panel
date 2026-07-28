@@ -13,7 +13,8 @@ itself uses (`~/.kiro/...` and `<workspace>/.kiro/...`), so changes made here
 take effect in Kiro immediately, and vice versa.
 
 See [SPEC.md](SPEC.md) for the full design writeup, including what was tried
-and ruled out for usage/credit tracking.
+and ruled out for usage/credit tracking, and the story behind every feature
+below.
 
 ## Features
 
