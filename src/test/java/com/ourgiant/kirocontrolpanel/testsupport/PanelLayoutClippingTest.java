@@ -3,6 +3,7 @@ package com.ourgiant.kirocontrolpanel.testsupport;
 import com.ourgiant.kirocontrolpanel.AppPreferences;
 import com.ourgiant.kirocontrolpanel.agents.AgentFormPanel;
 import com.ourgiant.kirocontrolpanel.agents.AgentsPanel;
+import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupFindingsPanel;
 import com.ourgiant.kirocontrolpanel.hooks.HookFormPanel;
 import com.ourgiant.kirocontrolpanel.hooks.HooksPanel;
 import com.ourgiant.kirocontrolpanel.mcp.McpPanel;
@@ -70,7 +71,8 @@ class PanelLayoutClippingTest {
             Arguments.of("AgentsPanel", (Supplier<JComponent>) () -> new AgentsPanel(preferences, watcher), NARROW_WIDTH),
             Arguments.of("McpServerFormPanel", (Supplier<JComponent>) McpServerFormPanel::new, NARROW_WIDTH),
             Arguments.of("HookFormPanel", (Supplier<JComponent>) HookFormPanel::new, NARROW_WIDTH),
-            Arguments.of("AgentFormPanel", (Supplier<JComponent>) AgentFormPanel::new, NARROW_WIDTH)
+            Arguments.of("AgentFormPanel", (Supplier<JComponent>) AgentFormPanel::new, NARROW_WIDTH),
+            Arguments.of("KiroSetupFindingsPanel", (Supplier<JComponent>) KiroSetupFindingsPanel::new, NARROW_WIDTH)
         );
     }
 

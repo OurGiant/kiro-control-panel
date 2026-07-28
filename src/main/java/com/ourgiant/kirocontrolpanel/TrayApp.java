@@ -1,5 +1,7 @@
 package com.ourgiant.kirocontrolpanel;
 
+import com.ourgiant.kirocontrolpanel.diagnostics.Finding;
+import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanDialog;
 import com.ourgiant.kirocontrolpanel.util.AppVersion;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.GlobalKiroFolderMonitor;
@@ -20,6 +22,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -92,9 +95,23 @@ public class TrayApp {
         if (!preferences.isFirstRunComplete()) {
             new FirstRunDialog(mainWindow).setVisible(true);
             preferences.setFirstRunComplete(true);
+            runFirstRunSetupScan();
         }
 
         checkForUpdateAndNotifyIfNewer();
+    }
+
+    /**
+     * Silent unless something was actually found: an existing Kiro installation with a
+     * clean .kiro tree shows nothing here -- the same scan is always available afterward
+     * via Help > Scan Kiro Setup..., so this is purely a "you might want to know" nudge
+     * for new users whose existing files predate this app. See #78.
+     */
+    private void runFirstRunSetupScan() {
+        List<Finding> findings = MainWindow.scanForFindings(preferences);
+        if (!findings.isEmpty()) {
+            new KiroSetupScanDialog(mainWindow, findings).setVisible(true);
+        }
     }
 
     /**
