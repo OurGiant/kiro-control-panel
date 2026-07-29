@@ -41,6 +41,18 @@ action on each item opens its real location in the OS file manager.
 - **Agents**: create/edit/delete `.kiro/agents/*.json` custom agent configs,
   with a Form editor for the common fields and Raw JSON for the rest
 
+### Usage (tab)
+
+Shows your live plan/credit balance — plan name, credits used vs. cap,
+billing cycle reset date, and overage status — fetched from the local
+`kiro-cli` binary over its own Agent Client Protocol (ACP) interface, with a
+"Refresh" button to pull the latest numbers on demand. This talks only to
+your own already-authenticated local CLI process, never to Kiro's backend
+directly; see [SPEC.md](SPEC.md)'s Non-goals section for the full story on
+why this path was chosen over the ones that were ruled out. Falls back to a
+static note pointing at `kiro-cli` → `/usage` if `kiro-cli` isn't installed
+or the call fails for any reason.
+
 ### Kiro Setup Scan (Help > Scan Kiro Setup...)
 
 Scans MCP/Steering/Skills/Hooks/Agents across Global and every pinned
@@ -105,9 +117,6 @@ it's just a launcher.
   `jpackage`, with proper Linux desktop integration (app-menu entry,
   taskbar icon, `kiro-control-panel` on `PATH`)
 
-Usage/credit tracking is intentionally not implemented — see SPEC.md's
-Non-goals section for why.
-
 ## Prerequisites
 
 - Java 24
@@ -158,7 +167,7 @@ src/main/java/com/ourgiant/kirocontrolpanel/
 ├── diagnostics/              # Kiro Setup Scan (structural checks + fixes)
 ├── changelog/                # Change Log viewer + external-change watchers
 ├── snapshot/                 # Periodic .kiro backup (SnapshotService, SnapshotScheduler)
-├── usage/                    # Static placeholder — see SPEC.md
+├── usage/                    # Live usage via kiro-cli's ACP interface (KiroUsageService)
 └── util/                     # FrontMatterParser, JsonMapperFactory,
                                # WorkspaceScopeBar, RawJsonEditorDialog, IconFactory,
                                # GitAutoCommitter, KiroFolderMonitor, KiroSessionLauncher
