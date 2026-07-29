@@ -52,8 +52,8 @@ the real names from an actual PR's CI run first, then add them.
 - Not a chat client — does not talk to models or run agents.
 - Not a replacement for `kiro-cli` — a companion for config/file management
   it doesn't expose well to CLI users.
-- Personal usage/credit balance: **no viable path exists yet, so this is
-  held rather than shipped.** Ruled out, in order:
+- Personal usage/credit balance: shipped (issue #94) via a fourth path
+  found after the first three were ruled out:
   1. Shelling out to `kiro-cli` for `/usage` output — doesn't work.
      `kiro-cli chat --no-interactive` explicitly excludes slash commands
      ("Interactive slash commands are not available" in headless mode);
@@ -72,10 +72,20 @@ the real names from an actual PR's CI run first, then add them.
      ToS violation (it's exactly what those proxy tools exist to route
      around) and it's an unversioned internal surface with no vendor
      support if it changes.
-
-  v1's Usage tab is a static note pointing users at `kiro-cli` → `/usage`
-  directly — most people using this tool already have the CLI open
-  anyway. Revisit once kirodotdev/Kiro#7752 (a scriptable usage API) ships.
+  4. **Shipped:** driving the local `kiro-cli` binary over its own Agent
+     Client Protocol (ACP) interface — the same JSON-RPC-over-stdio surface
+     editor integrations (e.g. Zed) use. `kiro-cli acp` exposes an
+     undocumented `_kiro.dev/commands/execute` method that can run the
+     `/usage` command programmatically, returning the same data as the
+     REPL card as structured JSON. Unlike #3, this never talks to AWS
+     directly — it only spawns the user's own already-authenticated local
+     CLI process, the same trust boundary as #1's shellout, just a
+     different (structured) subcommand. Found via a comment on
+     `kirodotdev/Kiro#7752` (the tracking issue for a first-party
+     scriptable usage API, still open). Since this is an undocumented CLI
+     internal that could change shape without notice, `UsagePanel` falls
+     back to the original static note (`kiro-cli` → `/usage`) on any
+     failure — see `KiroUsageService`.
 
 ## Kiro file formats (source of truth, from kiro.dev docs)
 
@@ -86,7 +96,7 @@ the real names from an actual PR's CI run first, then add them.
 | Skills   | `~/.kiro/skills/<name>/SKILL.md` | `<ws>/.kiro/skills/<name>/SKILL.md` | Folder per skill; `SKILL.md` (YAML front matter + instructions) is required, plus optional `scripts/`, `references/`, `assets/`. |
 | Hooks    | — (workspace only)          | `<ws>/.kiro/hooks/*.json`         | JSON: `name`, `trigger` (e.g. `PostFileSave`), `matcher`, `action{type,command\|prompt}`, `timeout`, `enabled`. |
 | Agents   | `~/.kiro/agents/*.json`     | `<ws>/.kiro/agents/*.json`        | JSON, one file per agent (filename minus `.json` is the identity by default): `name`, `description`, `prompt`, `mcpServers`, `tools`, `toolAliases`, `allowedTools`, `toolsSettings`, `resources`, `hooks`, `includeMcpJson`, `model`, `keyboardShortcut`, `welcomeMessage` — all optional. |
-| Usage    | n/a (no local file)         | n/a                                | Held — no viable local/API source; see Non-goals. |
+| Usage    | n/a (no local file)         | n/a                                | Fetched live via `kiro-cli acp` (ACP JSON-RPC over stdio); see Non-goals and `KiroUsageService`. |
 
 `KIRO_HOME` env var is honored to relocate the global `~/.kiro` root, matching
 Kiro's own behavior.
@@ -116,8 +126,9 @@ Kiro's own behavior.
    CRUD, same as every other panel — never executes an agent or talks to a
    model, consistent with the "does not talk to models or run agents"
    non-goal above.
-6. **Usage panel** — held (see Non-goals). Static note directing users to
-   `kiro-cli` → `/usage` instead of a broken or ToS-risky feature.
+6. **Usage panel** — live plan/credit balance fetched via `kiro-cli acp`
+   (see Non-goals and `KiroUsageService`), falling back to a static note
+   directing users to `kiro-cli` → `/usage` if the fetch fails.
 
 ## Cross-cutting behavior
 
