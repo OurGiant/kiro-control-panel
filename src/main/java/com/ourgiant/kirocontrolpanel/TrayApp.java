@@ -4,6 +4,7 @@ import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
 import com.ourgiant.kirocontrolpanel.changelog.ChangeLogWatcherManager;
 import com.ourgiant.kirocontrolpanel.diagnostics.Finding;
 import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanDialog;
+import com.ourgiant.kirocontrolpanel.snapshot.SnapshotScheduler;
 import com.ourgiant.kirocontrolpanel.util.AppVersion;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.IconFactory;
@@ -93,6 +94,7 @@ public class TrayApp {
         initializeSystemTray();
         startGlobalKiroFolderMonitor();
         startChangeLog();
+        startSnapshotScheduler();
         mainWindow.setVisible(true);
         syncWindowPositionWithWindowManager(mainWindow);
 
@@ -242,6 +244,15 @@ public class TrayApp {
     private void startChangeLog() {
         ChangeLogService.pruneOlderThan(ZonedDateTime.now().minusMonths(3).toInstant());
         new ChangeLogWatcherManager(preferences).start();
+    }
+
+    /**
+     * Opt-in, off until a destination folder is set in Settings (see #91): checks whether
+     * the newest snapshot is stale on every launch, then keeps polling for the rest of the
+     * session so a long-running instance still snapshots on schedule.
+     */
+    private void startSnapshotScheduler() {
+        new SnapshotScheduler(preferences).start();
     }
 
     private void notifyGlobalKiroChanged() {

@@ -1,5 +1,7 @@
 package com.ourgiant.kirocontrolpanel;
 
+import com.ourgiant.kirocontrolpanel.snapshot.SnapshotFrequency;
+import com.ourgiant.kirocontrolpanel.snapshot.SnapshotService;
 import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
 import com.ourgiant.kirocontrolpanel.util.KiroSessionLauncher;
 import org.slf4j.Logger;
@@ -7,6 +9,13 @@ import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 
 /**
  * App-wide preferences -- theme, git tracking, and (Windows-only) PowerShell
@@ -30,6 +39,8 @@ public class SettingsDialog extends JDialog {
         content.add(buildChangeAlertsSection(preferences));
         content.add(Box.createVerticalStrut(12));
         content.add(buildGitSection(preferences));
+        content.add(Box.createVerticalStrut(12));
+        content.add(buildSnapshotSection(preferences));
 
         if (KiroSessionLauncher.detect(System.getProperty("os.name")) == KiroSessionLauncher.Platform.WINDOWS) {
             content.add(Box.createVerticalStrut(12));
@@ -117,6 +128,163 @@ public class SettingsDialog extends JDialog {
         });
         section.add(gitTrackingCheckbox);
         return section;
+    }
+
+    private JPanel buildSnapshotSection(AppPreferences preferences) {
+        JPanel section = titledSection("Snapshots");
+
+        JCheckBox enabledCheckbox = new JCheckBox(
+            "Snapshot ~/.kiro Periodically", preferences.isSnapshotEnabled());
+        enabledCheckbox.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel destinationRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        destinationRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        destinationRow.add(new JLabel("Destination:"));
+        destinationRow.add(Box.createHorizontalStrut(8));
+        JTextField destinationField = new JTextField(preferences.getSnapshotDestination(), 22);
+        destinationField.setEditable(false);
+        destinationRow.add(destinationField);
+        destinationRow.add(Box.createHorizontalStrut(8));
+        JButton browseButton = new JButton("Browse...");
+        destinationRow.add(browseButton);
+
+        JPanel frequencyRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        frequencyRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        frequencyRow.add(new JLabel("Frequency:"));
+        frequencyRow.add(Box.createHorizontalStrut(8));
+        JComboBox<SnapshotFrequency> frequencyCombo = new JComboBox<>(SnapshotFrequency.values());
+        frequencyCombo.setSelectedItem(SnapshotFrequency.closestTo(preferences.getSnapshotFrequencyMinutes()));
+        frequencyRow.add(frequencyCombo);
+
+        JPanel retentionRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        retentionRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        retentionRow.add(new JLabel("Keep Last:"));
+        retentionRow.add(Box.createHorizontalStrut(8));
+        JComboBox<Integer> retentionCombo = new JComboBox<>(new Integer[] {10, 30, 60, 100});
+        retentionCombo.setSelectedItem(preferences.getSnapshotRetentionCount());
+        retentionRow.add(retentionCombo);
+        retentionRow.add(Box.createHorizontalStrut(4));
+        retentionRow.add(new JLabel("snapshots"));
+
+        JLabel lastSnapshotLabel = new JLabel(describeLastSnapshot(preferences));
+        lastSnapshotLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        lastSnapshotLabel.setFont(lastSnapshotLabel.getFont().deriveFont(lastSnapshotLabel.getFont().getSize2D() - 1f));
+        lastSnapshotLabel.setForeground(Color.GRAY);
+
+        JPanel actionRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        actionRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JButton snapshotNowButton = new JButton("Snapshot Now");
+        actionRow.add(snapshotNowButton);
+
+        JLabel hint = new JLabel("Snapshots exclude extensions/ and sessions/ (Kiro-managed, ephemeral state).");
+        hint.setAlignmentX(Component.LEFT_ALIGNMENT);
+        hint.setFont(hint.getFont().deriveFont(hint.getFont().getSize2D() - 1f));
+        hint.setForeground(Color.GRAY);
+
+        enabledCheckbox.addActionListener(e -> {
+            if (enabledCheckbox.isSelected() && preferences.getSnapshotDestination().isBlank()) {
+                JOptionPane.showMessageDialog(this,
+                    "Choose a destination folder first.",
+                    "No Destination Set", JOptionPane.WARNING_MESSAGE);
+                enabledCheckbox.setSelected(false);
+                return;
+            }
+            preferences.setSnapshotEnabled(enabledCheckbox.isSelected());
+        });
+
+        browseButton.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            chooser.setDialogTitle("Select Snapshot Destination");
+            if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            String path = chooser.getSelectedFile().getAbsolutePath();
+            preferences.setSnapshotDestination(path);
+            destinationField.setText(path);
+            lastSnapshotLabel.setText(describeLastSnapshot(preferences));
+        });
+
+        frequencyCombo.addActionListener(e -> {
+            SnapshotFrequency selected = (SnapshotFrequency) frequencyCombo.getSelectedItem();
+            if (selected != null) {
+                preferences.setSnapshotFrequencyMinutes(selected.minutes());
+            }
+        });
+
+        retentionCombo.addActionListener(e -> {
+            Integer selected = (Integer) retentionCombo.getSelectedItem();
+            if (selected != null) {
+                preferences.setSnapshotRetentionCount(selected);
+            }
+        });
+
+        snapshotNowButton.addActionListener(e -> {
+            String destination = preferences.getSnapshotDestination();
+            if (destination.isBlank()) {
+                JOptionPane.showMessageDialog(this,
+                    "Choose a destination folder first.",
+                    "No Destination Set", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            Path destinationDir = Paths.get(destination);
+            snapshotNowButton.setEnabled(false);
+            snapshotNowButton.setText("Snapshotting...");
+            SwingWorker<Void, Void> worker = new SwingWorker<>() {
+                @Override
+                protected Void doInBackground() throws IOException {
+                    SnapshotService.createSnapshot(KiroPaths.globalKiroHome(), destinationDir);
+                    SnapshotService.pruneOldSnapshots(destinationDir, preferences.getSnapshotRetentionCount());
+                    return null;
+                }
+
+                @Override
+                protected void done() {
+                    snapshotNowButton.setEnabled(true);
+                    snapshotNowButton.setText("Snapshot Now");
+                    try {
+                        get();
+                        lastSnapshotLabel.setText(describeLastSnapshot(preferences));
+                    } catch (Exception ex) {
+                        logger.warn("Manual .kiro snapshot failed", ex);
+                        String detail = ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage();
+                        JOptionPane.showMessageDialog(SettingsDialog.this,
+                            "Snapshot failed: " + detail,
+                            "Snapshot Failed", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            };
+            worker.execute();
+        });
+
+        section.add(enabledCheckbox);
+        section.add(Box.createVerticalStrut(6));
+        section.add(destinationRow);
+        section.add(Box.createVerticalStrut(6));
+        section.add(frequencyRow);
+        section.add(Box.createVerticalStrut(6));
+        section.add(retentionRow);
+        section.add(Box.createVerticalStrut(6));
+        section.add(actionRow);
+        section.add(lastSnapshotLabel);
+        section.add(Box.createVerticalStrut(4));
+        section.add(hint);
+        return section;
+    }
+
+    private static String describeLastSnapshot(AppPreferences preferences) {
+        String destination = preferences.getSnapshotDestination();
+        if (destination.isBlank()) {
+            return "No destination chosen yet.";
+        }
+        Optional<Instant> latest = SnapshotService.latestSnapshotTime(Paths.get(destination));
+        if (latest.isEmpty()) {
+            return "No snapshot taken yet.";
+        }
+        String formatted = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+            .withZone(ZoneId.systemDefault())
+            .format(latest.get());
+        return "Last snapshot: " + formatted;
     }
 
     private JPanel buildWindowsSection(AppPreferences preferences) {
