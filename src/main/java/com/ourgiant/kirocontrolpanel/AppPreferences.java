@@ -22,9 +22,15 @@ public class AppPreferences {
     private static final String KEY_GIT_TRACKING_ENABLED = "gitTrackingEnabled";
     private static final String KEY_FOLDER_MONITOR_ALERTS_ENABLED = "folderMonitorAlertsEnabled";
     private static final String KEY_LAST_NOTIFIED_UPDATE_VERSION = "lastNotifiedUpdateVersion";
+    private static final String KEY_SNAPSHOT_ENABLED = "snapshotEnabled";
+    private static final String KEY_SNAPSHOT_DESTINATION = "snapshotDestination";
+    private static final String KEY_SNAPSHOT_FREQUENCY_MINUTES = "snapshotFrequencyMinutes";
+    private static final String KEY_SNAPSHOT_RETENTION_COUNT = "snapshotRetentionCount";
 
     private static final String WORKSPACE_DELIMITER = "\n";
     private static final String DEFAULT_THEME = "GitHub Dark";
+    private static final int DEFAULT_SNAPSHOT_FREQUENCY_MINUTES = 1440;
+    private static final int DEFAULT_SNAPSHOT_RETENTION_COUNT = 30;
 
     private final Preferences prefs;
 
@@ -139,5 +145,39 @@ public class AppPreferences {
 
     public void setLastNotifiedUpdateVersion(String version) {
         prefs.put(KEY_LAST_NOTIFIED_UPDATE_VERSION, version);
+    }
+
+    /** Off by default -- opt-in, since enabling it writes snapshot archives to a chosen folder. See #91. */
+    public boolean isSnapshotEnabled() {
+        return prefs.getBoolean(KEY_SNAPSHOT_ENABLED, false);
+    }
+
+    public void setSnapshotEnabled(boolean enabled) {
+        prefs.putBoolean(KEY_SNAPSHOT_ENABLED, enabled);
+    }
+
+    /** Empty string if the user hasn't chosen a destination folder yet. */
+    public String getSnapshotDestination() {
+        return prefs.get(KEY_SNAPSHOT_DESTINATION, "");
+    }
+
+    public void setSnapshotDestination(String absolutePath) {
+        prefs.put(KEY_SNAPSHOT_DESTINATION, absolutePath);
+    }
+
+    public int getSnapshotFrequencyMinutes() {
+        return prefs.getInt(KEY_SNAPSHOT_FREQUENCY_MINUTES, DEFAULT_SNAPSHOT_FREQUENCY_MINUTES);
+    }
+
+    public void setSnapshotFrequencyMinutes(int minutes) {
+        prefs.putInt(KEY_SNAPSHOT_FREQUENCY_MINUTES, minutes);
+    }
+
+    public int getSnapshotRetentionCount() {
+        return prefs.getInt(KEY_SNAPSHOT_RETENTION_COUNT, DEFAULT_SNAPSHOT_RETENTION_COUNT);
+    }
+
+    public void setSnapshotRetentionCount(int count) {
+        prefs.putInt(KEY_SNAPSHOT_RETENTION_COUNT, count);
     }
 }
