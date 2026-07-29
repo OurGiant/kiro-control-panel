@@ -53,7 +53,22 @@ more general `verify-java-swing` skill for the underlying techniques (modal-
 dialog `invokeAndWait` deadlock, synthetic `MouseEvent` dispatch, process
 safety on a shared display).
 
-## 6. Bump the patch version
+## 6. Update README for user-facing changes
+
+If the change adds or materially changes a feature a user would notice
+(a new tab, a new menu action, a new panel behavior), add or update its
+entry in README.md's Features section, matching the style of the
+existing entries there — this repo's convention is that README stays a
+complete, current feature list, not just SPEC.md. Skip this for pure bug
+fixes, internal refactors, or anything not user-visible.
+
+`main` is a protected branch requiring PRs and passing status checks —
+even a README-only change needs its own branch and PR, it can't be
+pushed to `main` directly (confirmed the hard way on issue #94's
+follow-up: a direct push to `main` was rejected with "Changes must be
+made through a pull request").
+
+## 7. Bump the patch version
 
 **Every issue-fixing PR bumps `pom.xml`'s `<version>` patch component by
 one** — `M.m.X` → `M.m.(X+1)`, e.g. `1.2.1` → `1.2.2`. This lands in the
@@ -82,7 +97,7 @@ or resetting the patch number back to 0 for a real numbered release) is a
 separate, deliberate decision the user makes when actually cutting a
 release — not something this per-issue convention decides on its own.
 
-## 7. Commit, push, open the PR
+## 8. Commit, push, open the PR
 
 Commit message references the issue (`fixes #N` or `(fixes #N)` in the
 subject). Push, then:
@@ -98,7 +113,7 @@ EOF
 )"
 ```
 
-## 8. Watch CI, then stop and wait
+## 9. Watch CI, then stop and wait
 
 ```bash
 gh pr checks <N> --watch --interval 30
