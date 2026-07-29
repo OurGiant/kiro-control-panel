@@ -76,6 +76,15 @@ the global `~/.kiro` tree to a local git repo, turning it into a
 self-maintaining, revertible history you can inspect with git directly —
 no in-app version browser needed.
 
+### Periodic .kiro snapshots (File > Settings > Snapshots)
+
+Zips the global `~/.kiro` tree to a destination folder you choose, on a
+schedule (30 minutes / 1 hour / 4 hours / 12 hours / 1 day), pruning down
+to a keep-last-N count after each one — plus a "Snapshot Now" button for
+an ad-hoc backup at any time. Off by default until a destination is set.
+`sessions/`, `extensions/`, and `.git` (Kiro- and tooling-managed ephemeral
+state) are excluded from every snapshot.
+
 ### Launch kiro-cli... (every scope bar, and the tray icon menu)
 
 Opens an independent terminal window (macOS Terminal.app, Windows
@@ -136,7 +145,7 @@ project's workspace-scoped resources (`<workspace>/.kiro/...`), pin it via
 src/main/java/com/ourgiant/kirocontrolpanel/
 ├── TrayApp.java              # main() + tray icon lifecycle
 ├── MainWindow.java           # JFrame, tabbed panels, File/Help menus
-├── SettingsDialog.java       # theme, git tracking, and Windows-only prefs (File > Settings...)
+├── SettingsDialog.java       # theme, git tracking, snapshots, and Windows-only prefs (File > Settings...)
 ├── ThemeManager.java         # FlatLaf theme switching
 ├── AppPreferences.java       # recent workspaces, theme, window bounds
 ├── KiroPaths.java            # resolves ~/.kiro vs KIRO_HOME, workspace .kiro
@@ -148,6 +157,7 @@ src/main/java/com/ourgiant/kirocontrolpanel/
 ├── agents/                   # Agent config management (agents/*.json)
 ├── diagnostics/              # Kiro Setup Scan (structural checks + fixes)
 ├── changelog/                # Change Log viewer + external-change watchers
+├── snapshot/                 # Periodic .kiro backup (SnapshotService, SnapshotScheduler)
 ├── usage/                    # Static placeholder — see SPEC.md
 └── util/                     # FrontMatterParser, JsonMapperFactory,
                                # WorkspaceScopeBar, RawJsonEditorDialog, IconFactory,
