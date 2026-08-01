@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -38,6 +39,8 @@ public class HooksPanel extends JPanel {
 
     private final HookTableModel tableModel = new HookTableModel();
     private final JTable table = new JTable(tableModel);
+    private final TableRowSorter<HookTableModel> rowSorter = new TableRowSorter<>(tableModel);
+    private final JTextField filterField = SwingLayoutUtils.createFilterField(this::applyFilter);
 
     private JButton editButton;
     private JButton removeButton;
@@ -55,6 +58,7 @@ public class HooksPanel extends JPanel {
         scopeBar.addScopeChangeListener(scope -> reloadTable());
         add(scopeBar, BorderLayout.NORTH);
 
+        table.setRowSorter(rowSorter);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -69,7 +73,7 @@ public class HooksPanel extends JPanel {
                 }
             }
         });
-        add(new JScrollPane(table), BorderLayout.CENTER);
+        add(SwingLayoutUtils.createFilterableContent(filterField, new JScrollPane(table)), BorderLayout.CENTER);
         add(createSideButtons(), BorderLayout.EAST);
 
         reloadTable();
@@ -122,6 +126,23 @@ public class HooksPanel extends JPanel {
         revealButton.setEnabled(hasSelection);
     }
 
+    private void applyFilter() {
+        String query = filterField.getText();
+        rowSorter.setRowFilter(query == null || query.isBlank()
+            ? null
+            : RowFilter.regexFilter("(?i)" + Pattern.quote(query)));
+    }
+
+    /**
+     * The table's row sorter means {@link JTable#getSelectedRow()} returns a view index, which
+     * only matches a model index (what {@link HookTableModel#entryAt} expects) when nothing is
+     * filtered/sorted -- always convert before indexing into the model.
+     */
+    private int selectedModelRow() {
+        int viewRow = table.getSelectedRow();
+        return viewRow < 0 ? -1 : table.convertRowIndexToModel(viewRow);
+    }
+
     private void onAdd() {
         WorkspaceScope scope = scopeBar.getSelectedScope();
         if (scope == null) {
@@ -167,7 +188,7 @@ public class HooksPanel extends JPanel {
     }
 
     private void onEdit() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }
@@ -181,7 +202,7 @@ public class HooksPanel extends JPanel {
     }
 
     private void onToggleEnabled() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }
@@ -191,7 +212,7 @@ public class HooksPanel extends JPanel {
     }
 
     private void onRemove() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }
@@ -210,14 +231,14 @@ public class HooksPanel extends JPanel {
     }
 
     private void onReveal() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row >= 0) {
             DesktopUtils.revealInFileManager(this, tableModel.entryAt(row).getFilePath());
         }
     }
 
     private void onEditRawJson() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }

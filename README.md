@@ -24,7 +24,10 @@ Every panel below has a Global tab plus one tab per pinned workspace, and
 edits take effect in Kiro (IDE or CLI) immediately, since it's the same
 on-disk files — nothing is synced or duplicated. Pinning a workspace in one
 panel makes it available in every other panel too, and a "Reveal File"
-action on each item opens its real location in the OS file manager.
+action on each item opens its real location in the OS file manager. A live
+filter field above each panel's list narrows it to matching entries as you
+type — useful once a scope accumulates more MCP servers, docs, skills,
+hooks, or agents than fit on screen at once.
 
 - **MCP Servers**: add/edit/enable/disable/remove entries in `mcp.json`,
   with a Form or Raw JSON editor for each server; a "Browse Catalog..."

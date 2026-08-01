@@ -6,6 +6,7 @@ import com.ourgiant.kirocontrolpanel.WorkspaceScope;
 import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
+import com.ourgiant.kirocontrolpanel.util.TextFilter;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,8 @@ public class AgentsPanel extends JPanel {
 
     private final DefaultListModel<AgentConfig> agentListModel = new DefaultListModel<>();
     private final JList<AgentConfig> agentList = new JList<>(agentListModel);
+    private final JTextField filterField = SwingLayoutUtils.createFilterField(this::applyFilter);
+    private List<AgentConfig> allAgents = List.of();
 
     private JButton editButton;
     private JButton deleteButton;
@@ -75,7 +78,7 @@ public class AgentsPanel extends JPanel {
                 }
             }
         });
-        add(new JScrollPane(agentList), BorderLayout.CENTER);
+        add(SwingLayoutUtils.createFilterableContent(filterField, new JScrollPane(agentList)), BorderLayout.CENTER);
         add(createSideButtons(), BorderLayout.EAST);
 
         reloadAgentList();
@@ -102,17 +105,26 @@ public class AgentsPanel extends JPanel {
 
     private void reloadAgentList() {
         WorkspaceScope scope = scopeBar.getSelectedScope();
-        agentListModel.clear();
         if (scope != null) {
-            List<AgentConfig> agents = scope.isGlobal()
+            allAgents = scope.isGlobal()
                 ? agentService.listGlobal()
                 : agentService.listWorkspace(scope.workspaceRoot());
-            for (AgentConfig agent : agents) {
-                agentListModel.addElement(agent);
-            }
             watcher.watch(scope.isGlobal()
                 ? KiroPaths.globalAgentsDir()
                 : KiroPaths.workspaceAgentsDir(scope.workspaceRoot()));
+        } else {
+            allAgents = List.of();
+        }
+        applyFilter();
+    }
+
+    private void applyFilter() {
+        agentListModel.clear();
+        String query = filterField.getText();
+        for (AgentConfig agent : allAgents) {
+            if (TextFilter.matches(agent.getFileName(), query)) {
+                agentListModel.addElement(agent);
+            }
         }
         updateButtonState();
     }
