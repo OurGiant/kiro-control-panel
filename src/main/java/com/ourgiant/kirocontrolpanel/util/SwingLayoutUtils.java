@@ -48,6 +48,16 @@ public final class SwingLayoutUtils {
         return candidate;
     }
 
+    /**
+     * Like {@link #suggestCopyName}, but for "Copy to..." rather than "Duplicate": keeps the
+     * original name as-is if it's free at the destination (the common case -- copying to a
+     * scope that doesn't already have an item by this name), only falling back to the
+     * "-copy"/"-copy-2" suffix convention if the destination already has one.
+     */
+    public static String suggestNameAvoidingCollision(String base, java.util.function.Predicate<String> taken) {
+        return taken.test(base) ? suggestCopyName(base, taken) : base;
+    }
+
     /** A text field that invokes {@code onChange} on every keystroke -- the live-filter-box pattern shared by every list/table panel. */
     public static JTextField createFilterField(Runnable onChange) {
         JTextField field = new JTextField();

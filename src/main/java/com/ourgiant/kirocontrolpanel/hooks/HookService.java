@@ -77,8 +77,9 @@ public class HookService {
 
     /**
      * Deep-copies a {@link Hook} (including its {@link HookAction} and both objects' unmodeled
-     * {@code extra} fields) via a Jackson round-trip, for the Hooks panel's "Duplicate" action --
-     * a manual field-by-field copy would silently drop anything only carried in {@code extra}.
+     * {@code extra} fields) via a Jackson round-trip, for the Hooks panel's "Duplicate" and
+     * "Copy to..." actions -- a manual field-by-field copy would silently drop anything only
+     * carried in {@code extra}.
      */
     public Hook copy(Hook original) {
         return mapper.convertValue(original, Hook.class);

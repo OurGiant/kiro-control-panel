@@ -67,8 +67,8 @@ public class AgentService {
     /**
      * Deep-copies {@code source}'s data (including unmodeled fields carried in {@code extra})
      * into a fresh config identified by {@code targetPath} -- for the Agents panel's "Duplicate"
-     * action. A manual field-by-field copy would silently drop anything only reachable via the
-     * Raw JSON tab.
+     * and "Copy to..." actions. A manual field-by-field copy would silently drop anything only
+     * reachable via the Raw JSON tab.
      */
     public AgentConfig copy(AgentConfig source, Path targetPath, Path workspaceRoot) throws IOException {
         AgentConfig copy = new AgentConfig(targetPath, workspaceRoot);

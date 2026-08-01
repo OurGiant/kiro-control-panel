@@ -19,4 +19,14 @@ class SwingLayoutUtilsTest {
 
         assertEquals("alpha-copy-4", SwingLayoutUtils.suggestCopyName("alpha", taken::contains));
     }
+
+    @Test
+    void avoidingCollisionKeepsTheOriginalNameWhenFreeAtTheDestination() {
+        assertEquals("alpha", SwingLayoutUtils.suggestNameAvoidingCollision("alpha", taken -> false));
+    }
+
+    @Test
+    void avoidingCollisionFallsBackToCopySuffixWhenTheOriginalNameIsTakenAtTheDestination() {
+        assertEquals("alpha-copy", SwingLayoutUtils.suggestNameAvoidingCollision("alpha", "alpha"::equals));
+    }
 }

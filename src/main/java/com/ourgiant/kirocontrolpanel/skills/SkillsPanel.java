@@ -5,6 +5,7 @@ import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.WorkspaceScope;
 import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
+import com.ourgiant.kirocontrolpanel.util.ScopePickerDialog;
 import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
 import com.ourgiant.kirocontrolpanel.util.TextFilter;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
@@ -19,6 +20,7 @@ import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -31,6 +33,7 @@ public class SkillsPanel extends JPanel {
     private static final Pattern VALID_SKILL_FOLDER_NAME = Pattern.compile("[a-z0-9][a-z0-9-]*");
 
     private final SkillService skillService = new SkillService();
+    private final AppPreferences preferences;
     private final DirectoryWatcher watcher;
     private final WorkspaceScopeBar scopeBar;
 
@@ -41,12 +44,14 @@ public class SkillsPanel extends JPanel {
 
     private JButton editButton;
     private JButton duplicateButton;
+    private JButton copyToButton;
     private JButton deleteButton;
     private JButton revealButton;
 
     public SkillsPanel(AppPreferences preferences, DirectoryWatcher watcher) {
         super(new BorderLayout(8, 8));
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        this.preferences = preferences;
         this.watcher = watcher;
         watcher.addListener(this::reloadSkillList);
 
@@ -96,6 +101,9 @@ public class SkillsPanel extends JPanel {
         duplicateButton = new JButton("Duplicate...");
         duplicateButton.addActionListener(e -> onDuplicate());
 
+        copyToButton = new JButton("Copy to...");
+        copyToButton.addActionListener(e -> onCopyTo());
+
         deleteButton = new JButton("Delete");
         deleteButton.setMnemonic(KeyEvent.VK_D);
         deleteButton.addActionListener(e -> onDelete());
@@ -103,7 +111,17 @@ public class SkillsPanel extends JPanel {
         revealButton = new JButton("Reveal Folder...");
         revealButton.addActionListener(e -> onReveal());
 
-        return SwingLayoutUtils.createVerticalButtonPanel(newButton, editButton, duplicateButton, deleteButton, revealButton);
+        return SwingLayoutUtils.createVerticalButtonPanel(
+            newButton, editButton, duplicateButton, copyToButton, deleteButton, revealButton);
+    }
+
+    /** Every scope (Global + pinned workspaces) other than {@code current} -- the destination choices for "Copy to...". */
+    private List<WorkspaceScope> otherScopes(WorkspaceScope current) {
+        List<WorkspaceScope> scopes = new ArrayList<>();
+        scopes.add(WorkspaceScope.global());
+        scopes.addAll(WorkspaceScope.pinnedWorkspaces(preferences));
+        scopes.remove(current);
+        return scopes;
     }
 
     private void reloadSkillList() {
@@ -142,6 +160,7 @@ public class SkillsPanel extends JPanel {
         boolean hasSelection = skillList.getSelectedValue() != null;
         editButton.setEnabled(hasSelection);
         duplicateButton.setEnabled(hasSelection);
+        copyToButton.setEnabled(hasSelection);
         deleteButton.setEnabled(hasSelection);
         revealButton.setEnabled(hasSelection);
     }
@@ -259,6 +278,52 @@ public class SkillsPanel extends JPanel {
             logger.error("Failed to duplicate skill: {}", selected.getSkillDir(), ex);
             JOptionPane.showMessageDialog(this,
                 "Failed to duplicate: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onCopyTo() {
+        WorkspaceScope current = scopeBar.getSelectedScope();
+        Skill selected = skillList.getSelectedValue();
+        if (current == null || selected == null) {
+            return;
+        }
+        List<WorkspaceScope> destinations = otherScopes(current);
+        if (destinations.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Pin another workspace first to copy to it.", "No Other Scopes", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        ScopePickerDialog picker = new ScopePickerDialog(
+            (Frame) SwingUtilities.getWindowAncestor(this), selected.getSkillFolderName(), destinations);
+        picker.setVisible(true);
+        if (!picker.isConfirmed()) {
+            return;
+        }
+        WorkspaceScope target = picker.getSelectedScope();
+
+        Path targetSkillsDir = target.isGlobal() ? KiroPaths.globalSkillsDir() : KiroPaths.workspaceSkillsDir(target.workspaceRoot());
+        String targetFolderName = SwingLayoutUtils.suggestNameAvoidingCollision(selected.getSkillFolderName(),
+            candidate -> Files.exists(targetSkillsDir.resolve(candidate)));
+        Path targetSkillDir = targetSkillsDir.resolve(targetFolderName);
+
+        try {
+            Skill fresh = skillService.load(selected.getSkillDir(), selected.getWorkspaceRoot());
+            Skill copy = new Skill(targetSkillDir, target.workspaceRoot());
+            copy.setName(fresh.getName());
+            copy.setDescription(fresh.getDescription());
+            copy.setBody(fresh.getBody());
+            copy.getExtraFrontMatter().putAll(fresh.getExtraFrontMatter());
+            // SKILL.md-only, same scope as "Duplicate" -- see its comment for why bundled
+            // scripts/references/assets aren't copied.
+
+            SkillEditorDialog dialog =
+                new SkillEditorDialog((Frame) SwingUtilities.getWindowAncestor(this), skillService, copy);
+            dialog.setVisible(true);
+        } catch (IOException ex) {
+            logger.error("Failed to copy skill {} to {}", selected.getSkillDir(), target, ex);
+            JOptionPane.showMessageDialog(this,
+                "Failed to copy: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
