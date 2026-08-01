@@ -7,6 +7,7 @@ import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.ScopePickerDialog;
 import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
+import com.ourgiant.kirocontrolpanel.util.TextFilter;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,8 +39,11 @@ public class SteeringPanel extends JPanel {
 
     private final DefaultListModel<SteeringDoc> docListModel = new DefaultListModel<>();
     private final JList<SteeringDoc> docList = new JList<>(docListModel);
+    private final JTextField filterField = SwingLayoutUtils.createFilterField(this::applyFilter);
+    private List<SteeringDoc> allDocs = List.of();
 
     private JButton editButton;
+    private JButton duplicateButton;
     private JButton copyToButton;
     private JButton deleteButton;
     private JButton revealButton;
@@ -79,7 +83,7 @@ public class SteeringPanel extends JPanel {
                 }
             }
         });
-        add(new JScrollPane(docList), BorderLayout.CENTER);
+        add(SwingLayoutUtils.createFilterableContent(filterField, new JScrollPane(docList)), BorderLayout.CENTER);
         add(createSideButtons(), BorderLayout.EAST);
 
         reloadDocList();
@@ -94,6 +98,9 @@ public class SteeringPanel extends JPanel {
         editButton.setMnemonic(KeyEvent.VK_E);
         editButton.addActionListener(e -> onEdit());
 
+        duplicateButton = new JButton("Duplicate...");
+        duplicateButton.addActionListener(e -> onDuplicate());
+
         copyToButton = new JButton("Copy to...");
         copyToButton.addActionListener(e -> onCopyTo());
 
@@ -104,7 +111,8 @@ public class SteeringPanel extends JPanel {
         revealButton = new JButton("Reveal File...");
         revealButton.addActionListener(e -> onReveal());
 
-        return SwingLayoutUtils.createVerticalButtonPanel(newButton, editButton, copyToButton, deleteButton, revealButton);
+        return SwingLayoutUtils.createVerticalButtonPanel(
+            newButton, editButton, duplicateButton, copyToButton, deleteButton, revealButton);
     }
 
     /** Every scope (Global + pinned workspaces) other than {@code current} -- the destination choices for "Copy to...". */
@@ -118,17 +126,26 @@ public class SteeringPanel extends JPanel {
 
     private void reloadDocList() {
         WorkspaceScope scope = scopeBar.getSelectedScope();
-        docListModel.clear();
         if (scope != null) {
-            List<SteeringDoc> docs = scope.isGlobal()
+            allDocs = scope.isGlobal()
                 ? steeringService.listGlobal()
                 : steeringService.listWorkspace(scope.workspaceRoot());
-            for (SteeringDoc doc : docs) {
-                docListModel.addElement(doc);
-            }
             watcher.watch(scope.isGlobal()
                 ? KiroPaths.globalSteeringDir()
                 : KiroPaths.workspaceSteeringDir(scope.workspaceRoot()));
+        } else {
+            allDocs = List.of();
+        }
+        applyFilter();
+    }
+
+    private void applyFilter() {
+        docListModel.clear();
+        String query = filterField.getText();
+        for (SteeringDoc doc : allDocs) {
+            if (TextFilter.matches(doc.getFileName(), query)) {
+                docListModel.addElement(doc);
+            }
         }
         updateButtonState();
     }
@@ -136,6 +153,7 @@ public class SteeringPanel extends JPanel {
     private void updateButtonState() {
         boolean hasSelection = docList.getSelectedValue() != null;
         editButton.setEnabled(hasSelection);
+        duplicateButton.setEnabled(hasSelection);
         copyToButton.setEnabled(hasSelection);
         deleteButton.setEnabled(hasSelection);
         revealButton.setEnabled(hasSelection);
@@ -198,6 +216,64 @@ public class SteeringPanel extends JPanel {
             logger.error("Failed to load steering doc: {}", selected.getFilePath(), ex);
             JOptionPane.showMessageDialog(this,
                 "Failed to open: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onDuplicate() {
+        WorkspaceScope scope = scopeBar.getSelectedScope();
+        SteeringDoc selected = docList.getSelectedValue();
+        if (scope == null || selected == null) {
+            return;
+        }
+        String currentFileName = selected.getFileName();
+        String baseName = currentFileName.endsWith(".md")
+            ? currentFileName.substring(0, currentFileName.length() - ".md".length())
+            : currentFileName;
+        Path dir = scope.isGlobal() ? KiroPaths.globalSteeringDir() : KiroPaths.workspaceSteeringDir(scope.workspaceRoot());
+        String suggestedName = SwingLayoutUtils.suggestCopyName(baseName,
+            candidate -> Files.exists(dir.resolve(candidate + ".md")));
+
+        String fileName = (String) JOptionPane.showInputDialog(this,
+            "File name (e.g. api-conventions.md):", "Duplicate Steering Doc",
+            JOptionPane.PLAIN_MESSAGE, null, null, suggestedName);
+        if (fileName == null || fileName.isBlank()) {
+            return;
+        }
+        fileName = fileName.trim();
+        String newBaseName = fileName.endsWith(".md") ? fileName.substring(0, fileName.length() - 3) : fileName;
+        if (!VALID_STEERING_FILE_NAME.matcher(newBaseName).matches()) {
+            JOptionPane.showMessageDialog(this,
+                "File names should be lowercase letters, digits, and hyphens only (optionally ending in .md).",
+                "Invalid Name", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        fileName = newBaseName + ".md";
+        Path filePath = dir.resolve(fileName);
+        if (Files.exists(filePath)) {
+            JOptionPane.showMessageDialog(this,
+                "A file named \"" + fileName + "\" already exists.", "Duplicate File", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            SteeringDoc fresh = steeringService.load(selected.getFilePath(), selected.getWorkspaceRoot());
+            SteeringDoc copy = new SteeringDoc(filePath, scope.workspaceRoot());
+            copy.setInclusion(fresh.getInclusion());
+            copy.setFileMatchPatterns(new ArrayList<>(fresh.getFileMatchPatterns()));
+            copy.setName(fresh.getName());
+            copy.setDescription(fresh.getDescription());
+            copy.setBody(fresh.getBody());
+
+            SteeringEditorDialog dialog =
+                new SteeringEditorDialog((Frame) SwingUtilities.getWindowAncestor(this), steeringService, copy);
+            dialog.setVisible(true);
+            if (dialog.isSaved()) {
+                reloadDocList();
+            }
+        } catch (IOException ex) {
+            logger.error("Failed to duplicate steering doc: {}", selected.getFilePath(), ex);
+            JOptionPane.showMessageDialog(this,
+                "Failed to duplicate: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 

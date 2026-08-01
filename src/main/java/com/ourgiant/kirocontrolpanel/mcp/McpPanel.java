@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * MCP servers tab: lists mcpServers from the current scope's mcp.json and
@@ -37,8 +39,11 @@ public class McpPanel extends JPanel {
 
     private final McpServerTableModel tableModel = new McpServerTableModel();
     private final JTable table = new JTable(tableModel);
+    private final TableRowSorter<McpServerTableModel> rowSorter = new TableRowSorter<>(tableModel);
+    private final JTextField filterField = SwingLayoutUtils.createFilterField(this::applyFilter);
 
     private JButton editButton;
+    private JButton duplicateButton;
     private JButton copyToButton;
     private JButton removeButton;
     private JButton toggleEnabledButton;
@@ -55,6 +60,7 @@ public class McpPanel extends JPanel {
         scopeBar.addScopeChangeListener(scope -> reloadTable());
         add(scopeBar, BorderLayout.NORTH);
 
+        table.setRowSorter(rowSorter);
         table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -69,7 +75,7 @@ public class McpPanel extends JPanel {
                 }
             }
         });
-        add(new JScrollPane(table), BorderLayout.CENTER);
+        add(SwingLayoutUtils.createFilterableContent(filterField, new JScrollPane(table)), BorderLayout.CENTER);
         add(createSideButtons(), BorderLayout.EAST);
 
         reloadTable();
@@ -86,6 +92,9 @@ public class McpPanel extends JPanel {
         editButton = new JButton("Edit...");
         editButton.setMnemonic(KeyEvent.VK_E);
         editButton.addActionListener(e -> onEdit());
+
+        duplicateButton = new JButton("Duplicate...");
+        duplicateButton.addActionListener(e -> onDuplicate());
 
         copyToButton = new JButton("Copy to...");
         copyToButton.addActionListener(e -> onCopyTo());
@@ -105,7 +114,8 @@ public class McpPanel extends JPanel {
         revealButton.addActionListener(e -> onReveal());
 
         return SwingLayoutUtils.createVerticalButtonPanel(
-            addButton, browseCatalogButton, editButton, copyToButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
+            addButton, browseCatalogButton, editButton, duplicateButton, copyToButton,
+            toggleEnabledButton, removeButton, rawJsonButton, revealButton);
     }
 
     /** Every scope (Global + pinned workspaces) other than {@code current} -- the destination choices for "Copy to...". */
@@ -146,9 +156,27 @@ public class McpPanel extends JPanel {
     private void updateButtonState() {
         boolean hasSelection = table.getSelectedRow() >= 0;
         editButton.setEnabled(hasSelection);
+        duplicateButton.setEnabled(hasSelection);
         copyToButton.setEnabled(hasSelection);
         removeButton.setEnabled(hasSelection);
         toggleEnabledButton.setEnabled(hasSelection);
+    }
+
+    private void applyFilter() {
+        String query = filterField.getText();
+        rowSorter.setRowFilter(query == null || query.isBlank()
+            ? null
+            : RowFilter.regexFilter("(?i)" + Pattern.quote(query)));
+    }
+
+    /**
+     * The table's row sorter means {@link JTable#getSelectedRow()} returns a view index, which
+     * only matches a model index (what {@link McpServerTableModel#nameAt}/{@code configAt} expect)
+     * when nothing is filtered/sorted -- always convert before indexing into the model.
+     */
+    private int selectedModelRow() {
+        int viewRow = table.getSelectedRow();
+        return viewRow < 0 ? -1 : table.convertRowIndexToModel(viewRow);
     }
 
     private void persist() {
@@ -186,7 +214,7 @@ public class McpPanel extends JPanel {
     }
 
     private void onEdit() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }
@@ -200,9 +228,27 @@ public class McpPanel extends JPanel {
         }
     }
 
+    private void onDuplicate() {
+        int row = selectedModelRow();
+        if (row < 0) {
+            return;
+        }
+        String originalName = tableModel.nameAt(row);
+        McpServerConfig original = tableModel.configAt(row);
+        String suggestedName = SwingLayoutUtils.suggestCopyName(originalName,
+            candidate -> tableModel.getConfig().getMcpServers().containsKey(candidate));
+        McpServerEditDialog dialog = new McpServerEditDialog(
+            (Frame) SwingUtilities.getWindowAncestor(this), tableModel.getConfig(), suggestedName, original);
+        dialog.setVisible(true);
+        if (dialog.isSaved()) {
+            persist();
+            reloadTable();
+        }
+    }
+
     private void onCopyTo() {
         WorkspaceScope current = currentScope();
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (current == null || row < 0) {
             return;
         }
@@ -245,7 +291,7 @@ public class McpPanel extends JPanel {
     }
 
     private void onToggleEnabled() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }
@@ -256,7 +302,7 @@ public class McpPanel extends JPanel {
     }
 
     private void onRemove() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }

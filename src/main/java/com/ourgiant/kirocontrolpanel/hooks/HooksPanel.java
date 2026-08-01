@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -42,8 +43,11 @@ public class HooksPanel extends JPanel {
 
     private final HookTableModel tableModel = new HookTableModel();
     private final JTable table = new JTable(tableModel);
+    private final TableRowSorter<HookTableModel> rowSorter = new TableRowSorter<>(tableModel);
+    private final JTextField filterField = SwingLayoutUtils.createFilterField(this::applyFilter);
 
     private JButton editButton;
+    private JButton duplicateButton;
     private JButton copyToButton;
     private JButton removeButton;
     private JButton toggleEnabledButton;
@@ -61,6 +65,7 @@ public class HooksPanel extends JPanel {
         scopeBar.addScopeChangeListener(scope -> reloadTable());
         add(scopeBar, BorderLayout.NORTH);
 
+        table.setRowSorter(rowSorter);
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -75,7 +80,7 @@ public class HooksPanel extends JPanel {
                 }
             }
         });
-        add(new JScrollPane(table), BorderLayout.CENTER);
+        add(SwingLayoutUtils.createFilterableContent(filterField, new JScrollPane(table)), BorderLayout.CENTER);
         add(createSideButtons(), BorderLayout.EAST);
 
         reloadTable();
@@ -89,6 +94,9 @@ public class HooksPanel extends JPanel {
         editButton = new JButton("Edit...");
         editButton.setMnemonic(KeyEvent.VK_E);
         editButton.addActionListener(e -> onEdit());
+
+        duplicateButton = new JButton("Duplicate...");
+        duplicateButton.addActionListener(e -> onDuplicate());
 
         copyToButton = new JButton("Copy to...");
         copyToButton.addActionListener(e -> onCopyTo());
@@ -108,7 +116,8 @@ public class HooksPanel extends JPanel {
         revealButton.addActionListener(e -> onReveal());
 
         return SwingLayoutUtils.createVerticalButtonPanel(
-            addButton, editButton, copyToButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
+            addButton, editButton, duplicateButton, copyToButton,
+            toggleEnabledButton, removeButton, rawJsonButton, revealButton);
     }
 
     /** Every OTHER pinned workspace -- hooks are workspace-only in Kiro, so Global is never a valid destination. */
@@ -132,11 +141,29 @@ public class HooksPanel extends JPanel {
     private void updateButtonState() {
         boolean hasSelection = table.getSelectedRow() >= 0;
         editButton.setEnabled(hasSelection);
+        duplicateButton.setEnabled(hasSelection);
         copyToButton.setEnabled(hasSelection);
         removeButton.setEnabled(hasSelection);
         toggleEnabledButton.setEnabled(hasSelection);
         rawJsonButton.setEnabled(hasSelection);
         revealButton.setEnabled(hasSelection);
+    }
+
+    private void applyFilter() {
+        String query = filterField.getText();
+        rowSorter.setRowFilter(query == null || query.isBlank()
+            ? null
+            : RowFilter.regexFilter("(?i)" + Pattern.quote(query)));
+    }
+
+    /**
+     * The table's row sorter means {@link JTable#getSelectedRow()} returns a view index, which
+     * only matches a model index (what {@link HookTableModel#entryAt} expects) when nothing is
+     * filtered/sorted -- always convert before indexing into the model.
+     */
+    private int selectedModelRow() {
+        int viewRow = table.getSelectedRow();
+        return viewRow < 0 ? -1 : table.convertRowIndexToModel(viewRow);
     }
 
     private void onAdd() {
@@ -184,7 +211,7 @@ public class HooksPanel extends JPanel {
     }
 
     private void onEdit() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }
@@ -197,9 +224,50 @@ public class HooksPanel extends JPanel {
         }
     }
 
+    private void onDuplicate() {
+        WorkspaceScope scope = scopeBar.getSelectedScope();
+        int row = selectedModelRow();
+        if (scope == null || row < 0) {
+            return;
+        }
+        HookEntry entry = tableModel.entryAt(row);
+        String suggestedSlug = SwingLayoutUtils.suggestCopyName(entry.getHook().getName(),
+            candidate -> Files.exists(KiroPaths.workspaceHooksDir(scope.workspaceRoot()).resolve(candidate + ".json")));
+
+        String slug = (String) JOptionPane.showInputDialog(this,
+            "Hook file name (lowercase, hyphenated, e.g. lint-on-save):", "Duplicate Hook",
+            JOptionPane.PLAIN_MESSAGE, null, null, suggestedSlug);
+        if (slug == null || slug.isBlank()) {
+            return;
+        }
+        slug = slug.trim();
+        if (!VALID_FILE_SLUG.matcher(slug).matches()) {
+            JOptionPane.showMessageDialog(this,
+                "File names should be lowercase letters, digits, and hyphens only.",
+                "Invalid Name", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        Hook copy = hookService.copy(entry.getHook());
+        copy.setName(slug);
+
+        HookEditDialog dialog = new HookEditDialog((Frame) SwingUtilities.getWindowAncestor(this), copy, true);
+        dialog.setVisible(true);
+        if (!dialog.isSaved()) {
+            return;
+        }
+        try {
+            hookService.createHookFile(scope.workspaceRoot(), slug, copy);
+            reloadTable();
+        } catch (IOException ex) {
+            logger.error("Failed to create hook file", ex);
+            JOptionPane.showMessageDialog(this, "Failed to save: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void onCopyTo() {
         WorkspaceScope current = scopeBar.getSelectedScope();
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (current == null || row < 0) {
             return;
         }
@@ -240,7 +308,7 @@ public class HooksPanel extends JPanel {
     }
 
     private void onToggleEnabled() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }
@@ -250,7 +318,7 @@ public class HooksPanel extends JPanel {
     }
 
     private void onRemove() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }
@@ -269,14 +337,14 @@ public class HooksPanel extends JPanel {
     }
 
     private void onReveal() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row >= 0) {
             DesktopUtils.revealInFileManager(this, tableModel.entryAt(row).getFilePath());
         }
     }
 
     private void onEditRawJson() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }

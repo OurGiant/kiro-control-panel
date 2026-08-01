@@ -7,6 +7,7 @@ import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.ScopePickerDialog;
 import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
+import com.ourgiant.kirocontrolpanel.util.TextFilter;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,8 +40,11 @@ public class AgentsPanel extends JPanel {
 
     private final DefaultListModel<AgentConfig> agentListModel = new DefaultListModel<>();
     private final JList<AgentConfig> agentList = new JList<>(agentListModel);
+    private final JTextField filterField = SwingLayoutUtils.createFilterField(this::applyFilter);
+    private List<AgentConfig> allAgents = List.of();
 
     private JButton editButton;
+    private JButton duplicateButton;
     private JButton copyToButton;
     private JButton deleteButton;
     private JButton revealButton;
@@ -80,7 +84,7 @@ public class AgentsPanel extends JPanel {
                 }
             }
         });
-        add(new JScrollPane(agentList), BorderLayout.CENTER);
+        add(SwingLayoutUtils.createFilterableContent(filterField, new JScrollPane(agentList)), BorderLayout.CENTER);
         add(createSideButtons(), BorderLayout.EAST);
 
         reloadAgentList();
@@ -95,6 +99,9 @@ public class AgentsPanel extends JPanel {
         editButton.setMnemonic(KeyEvent.VK_E);
         editButton.addActionListener(e -> onEdit());
 
+        duplicateButton = new JButton("Duplicate...");
+        duplicateButton.addActionListener(e -> onDuplicate());
+
         copyToButton = new JButton("Copy to...");
         copyToButton.addActionListener(e -> onCopyTo());
 
@@ -105,7 +112,8 @@ public class AgentsPanel extends JPanel {
         revealButton = new JButton("Reveal File...");
         revealButton.addActionListener(e -> onReveal());
 
-        return SwingLayoutUtils.createVerticalButtonPanel(newButton, editButton, copyToButton, deleteButton, revealButton);
+        return SwingLayoutUtils.createVerticalButtonPanel(
+            newButton, editButton, duplicateButton, copyToButton, deleteButton, revealButton);
     }
 
     /** Every scope (Global + pinned workspaces) other than {@code current} -- the destination choices for "Copy to...". */
@@ -119,17 +127,26 @@ public class AgentsPanel extends JPanel {
 
     private void reloadAgentList() {
         WorkspaceScope scope = scopeBar.getSelectedScope();
-        agentListModel.clear();
         if (scope != null) {
-            List<AgentConfig> agents = scope.isGlobal()
+            allAgents = scope.isGlobal()
                 ? agentService.listGlobal()
                 : agentService.listWorkspace(scope.workspaceRoot());
-            for (AgentConfig agent : agents) {
-                agentListModel.addElement(agent);
-            }
             watcher.watch(scope.isGlobal()
                 ? KiroPaths.globalAgentsDir()
                 : KiroPaths.workspaceAgentsDir(scope.workspaceRoot()));
+        } else {
+            allAgents = List.of();
+        }
+        applyFilter();
+    }
+
+    private void applyFilter() {
+        agentListModel.clear();
+        String query = filterField.getText();
+        for (AgentConfig agent : allAgents) {
+            if (TextFilter.matches(agent.getFileName(), query)) {
+                agentListModel.addElement(agent);
+            }
         }
         updateButtonState();
     }
@@ -137,6 +154,7 @@ public class AgentsPanel extends JPanel {
     private void updateButtonState() {
         boolean hasSelection = agentList.getSelectedValue() != null;
         editButton.setEnabled(hasSelection);
+        duplicateButton.setEnabled(hasSelection);
         copyToButton.setEnabled(hasSelection);
         deleteButton.setEnabled(hasSelection);
         revealButton.setEnabled(hasSelection);
@@ -200,6 +218,60 @@ public class AgentsPanel extends JPanel {
             logger.error("Failed to load agent config: {}", selected.getFilePath(), ex);
             JOptionPane.showMessageDialog(this,
                 "Failed to open: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onDuplicate() {
+        WorkspaceScope scope = scopeBar.getSelectedScope();
+        AgentConfig selected = agentList.getSelectedValue();
+        if (scope == null || selected == null) {
+            return;
+        }
+        String currentName = selected.getFileName();
+        String baseName = currentName.endsWith(".json")
+            ? currentName.substring(0, currentName.length() - ".json".length())
+            : currentName;
+        Path dir = scope.isGlobal() ? KiroPaths.globalAgentsDir() : KiroPaths.workspaceAgentsDir(scope.workspaceRoot());
+        String suggestedName = SwingLayoutUtils.suggestCopyName(baseName,
+            candidate -> Files.exists(dir.resolve(candidate + ".json")));
+
+        String fileName = (String) JOptionPane.showInputDialog(this,
+            "Agent file name (lowercase, hyphenated, e.g. aws-rust-agent):", "Duplicate Agent",
+            JOptionPane.PLAIN_MESSAGE, null, null, suggestedName);
+        if (fileName == null || fileName.isBlank()) {
+            return;
+        }
+        fileName = fileName.trim();
+        if (fileName.endsWith(".json")) {
+            fileName = fileName.substring(0, fileName.length() - ".json".length());
+        }
+        if (!VALID_AGENT_FILE_NAME.matcher(fileName).matches()) {
+            JOptionPane.showMessageDialog(this,
+                "Agent file names should be lowercase letters, digits, and hyphens only.",
+                "Invalid Name", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        fileName = fileName + ".json";
+        Path filePath = dir.resolve(fileName);
+        if (Files.exists(filePath)) {
+            JOptionPane.showMessageDialog(this,
+                "An agent named \"" + fileName + "\" already exists.", "Duplicate Agent", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            AgentConfig fresh = agentService.load(selected.getFilePath(), selected.getWorkspaceRoot());
+            AgentConfig copy = agentService.copy(fresh, filePath, scope.workspaceRoot());
+            AgentEditDialog dialog =
+                new AgentEditDialog((Frame) SwingUtilities.getWindowAncestor(this), copy, true);
+            dialog.setVisible(true);
+            if (dialog.isSaved()) {
+                persistThenReload(copy);
+            }
+        } catch (IOException ex) {
+            logger.error("Failed to duplicate agent config: {}", selected.getFilePath(), ex);
+            JOptionPane.showMessageDialog(this,
+                "Failed to duplicate: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
