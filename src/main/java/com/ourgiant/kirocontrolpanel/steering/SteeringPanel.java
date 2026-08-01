@@ -6,6 +6,7 @@ import com.ourgiant.kirocontrolpanel.WorkspaceScope;
 import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
+import com.ourgiant.kirocontrolpanel.util.TextFilter;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +36,8 @@ public class SteeringPanel extends JPanel {
 
     private final DefaultListModel<SteeringDoc> docListModel = new DefaultListModel<>();
     private final JList<SteeringDoc> docList = new JList<>(docListModel);
+    private final JTextField filterField = SwingLayoutUtils.createFilterField(this::applyFilter);
+    private List<SteeringDoc> allDocs = List.of();
 
     private JButton editButton;
     private JButton deleteButton;
@@ -74,7 +77,7 @@ public class SteeringPanel extends JPanel {
                 }
             }
         });
-        add(new JScrollPane(docList), BorderLayout.CENTER);
+        add(SwingLayoutUtils.createFilterableContent(filterField, new JScrollPane(docList)), BorderLayout.CENTER);
         add(createSideButtons(), BorderLayout.EAST);
 
         reloadDocList();
@@ -101,17 +104,26 @@ public class SteeringPanel extends JPanel {
 
     private void reloadDocList() {
         WorkspaceScope scope = scopeBar.getSelectedScope();
-        docListModel.clear();
         if (scope != null) {
-            List<SteeringDoc> docs = scope.isGlobal()
+            allDocs = scope.isGlobal()
                 ? steeringService.listGlobal()
                 : steeringService.listWorkspace(scope.workspaceRoot());
-            for (SteeringDoc doc : docs) {
-                docListModel.addElement(doc);
-            }
             watcher.watch(scope.isGlobal()
                 ? KiroPaths.globalSteeringDir()
                 : KiroPaths.workspaceSteeringDir(scope.workspaceRoot()));
+        } else {
+            allDocs = List.of();
+        }
+        applyFilter();
+    }
+
+    private void applyFilter() {
+        docListModel.clear();
+        String query = filterField.getText();
+        for (SteeringDoc doc : allDocs) {
+            if (TextFilter.matches(doc.getFileName(), query)) {
+                docListModel.addElement(doc);
+            }
         }
         updateButtonState();
     }
