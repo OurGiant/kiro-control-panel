@@ -28,6 +28,7 @@ public class KiroSetupFindingsPanel extends JPanel {
     private final JLabel statusLabel = new JLabel(" ");
     private final JButton openFileButton;
     private final JButton fixButton;
+    private final JButton fixAllButton;
     private final JButton rescanButton;
 
     public KiroSetupFindingsPanel() {
@@ -50,9 +51,12 @@ public class KiroSetupFindingsPanel extends JPanel {
         fixButton = new JButton("Fix...");
         fixButton.addActionListener(e -> onFix());
 
+        fixAllButton = new JButton("Fix All...");
+        fixAllButton.addActionListener(e -> onFixAll());
+
         rescanButton = new JButton("Rescan");
 
-        add(SwingLayoutUtils.createVerticalButtonPanel(openFileButton, fixButton, rescanButton), BorderLayout.EAST);
+        add(SwingLayoutUtils.createVerticalButtonPanel(openFileButton, fixButton, fixAllButton, rescanButton), BorderLayout.EAST);
 
         setFindings(List.of());
     }
@@ -87,6 +91,11 @@ public class KiroSetupFindingsPanel extends JPanel {
     }
 
     /** Package-private, for tests. */
+    JButton getFixAllButton() {
+        return fixAllButton;
+    }
+
+    /** Package-private, for tests. */
     JButton getRescanButton() {
         return rescanButton;
     }
@@ -107,6 +116,16 @@ public class KiroSetupFindingsPanel extends JPanel {
         Finding selected = findingList.getSelectedValue();
         openFileButton.setEnabled(selected != null);
         fixButton.setEnabled(selected != null && selected.isFixable());
+        fixAllButton.setEnabled(hasAnyFixable());
+    }
+
+    private boolean hasAnyFixable() {
+        for (int i = 0; i < findingListModel.size(); i++) {
+            if (findingListModel.get(i).isFixable()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void onOpenFile() {
@@ -148,6 +167,46 @@ public class KiroSetupFindingsPanel extends JPanel {
                 "Failed to apply fix: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             return false;
         }
+    }
+
+    private void onFixAll() {
+        List<Finding> fixable = getFindings().stream().filter(Finding::isFixable).toList();
+        if (fixable.isEmpty()) {
+            return;
+        }
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "Apply " + fixable.size() + " fix" + (fixable.size() == 1 ? "" : "es") + "?",
+            "Apply All Fixes?", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (confirm == JOptionPane.YES_OPTION) {
+            applyAllFixes(fixable);
+        }
+    }
+
+    /**
+     * Dialog-free batch apply, split out from {@link #onFixAll()} for the same headless-testing
+     * reason as {@link #applyFix}. Package-private, for tests. Applies every entry, collecting
+     * failures rather than stopping at the first one -- one bad file shouldn't block fixing the
+     * rest of an otherwise-healthy tree.
+     */
+    int applyAllFixes(List<Finding> fixable) {
+        int failed = 0;
+        for (Finding finding : fixable) {
+            try {
+                finding.fix().apply();
+                findingListModel.removeElement(finding);
+            } catch (IOException e) {
+                logger.warn("Failed to apply fix for {}", finding.path(), e);
+                failed++;
+            }
+        }
+        updateStatusText();
+        updateButtonState();
+        if (failed > 0) {
+            JOptionPane.showMessageDialog(this,
+                failed + " fix" + (failed == 1 ? "" : "es") + " failed to apply. See logs for details.",
+                "Some Fixes Failed", JOptionPane.WARNING_MESSAGE);
+        }
+        return failed;
     }
 
     private static final class FindingRenderer extends JPanel implements ListCellRenderer<Finding> {
