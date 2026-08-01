@@ -185,6 +185,36 @@ class HookServiceTest {
     }
 
     @Test
+    void copyPreservesUnknownFieldsAndIsIndependentOfTheOriginal() {
+        Hook original = new Hook();
+        original.setName("original-hook");
+        original.setTrigger("file_save");
+        original.setMatcher("**/*.java");
+        original.setEnabled(true);
+        original.setTimeout(30);
+        original.putExtra("futureHookField", "keep-me");
+        HookAction action = new HookAction();
+        action.setType(HookAction.TYPE_COMMAND);
+        action.setCommand("echo hi");
+        action.putExtra("futureActionField", "keep-me-too");
+        original.setAction(action);
+
+        Hook copy = service.copy(original);
+
+        assertEquals("original-hook", copy.getName());
+        assertEquals("file_save", copy.getTrigger());
+        assertEquals("**/*.java", copy.getMatcher());
+        assertEquals(30, copy.getTimeout());
+        assertEquals("keep-me", copy.getExtra().get("futureHookField"));
+        assertEquals(HookAction.TYPE_COMMAND, copy.getAction().getType());
+        assertEquals("echo hi", copy.getAction().getCommand());
+        assertEquals("keep-me-too", copy.getAction().getExtra().get("futureActionField"));
+
+        copy.setName("renamed-copy");
+        assertEquals("original-hook", original.getName(), "mutating the copy must not affect the original");
+    }
+
+    @Test
     void listWorkspaceReturnsEmptyWhenHooksDirMissing() throws IOException {
         Files.delete(hooksDir);
 

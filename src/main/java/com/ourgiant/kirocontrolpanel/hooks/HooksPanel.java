@@ -17,6 +17,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -40,6 +41,7 @@ public class HooksPanel extends JPanel {
     private final JTable table = new JTable(tableModel);
 
     private JButton editButton;
+    private JButton duplicateButton;
     private JButton removeButton;
     private JButton toggleEnabledButton;
     private JButton rawJsonButton;
@@ -84,6 +86,9 @@ public class HooksPanel extends JPanel {
         editButton.setMnemonic(KeyEvent.VK_E);
         editButton.addActionListener(e -> onEdit());
 
+        duplicateButton = new JButton("Duplicate...");
+        duplicateButton.addActionListener(e -> onDuplicate());
+
         toggleEnabledButton = new JButton("Enable/Disable");
         toggleEnabledButton.setMnemonic(KeyEvent.VK_T);
         toggleEnabledButton.addActionListener(e -> onToggleEnabled());
@@ -99,7 +104,7 @@ public class HooksPanel extends JPanel {
         revealButton.addActionListener(e -> onReveal());
 
         return SwingLayoutUtils.createVerticalButtonPanel(
-            addButton, editButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
+            addButton, editButton, duplicateButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
     }
 
     private void reloadTable() {
@@ -116,6 +121,7 @@ public class HooksPanel extends JPanel {
     private void updateButtonState() {
         boolean hasSelection = table.getSelectedRow() >= 0;
         editButton.setEnabled(hasSelection);
+        duplicateButton.setEnabled(hasSelection);
         removeButton.setEnabled(hasSelection);
         toggleEnabledButton.setEnabled(hasSelection);
         rawJsonButton.setEnabled(hasSelection);
@@ -177,6 +183,47 @@ public class HooksPanel extends JPanel {
         dialog.setVisible(true);
         if (dialog.isSaved()) {
             persist(entry);
+        }
+    }
+
+    private void onDuplicate() {
+        WorkspaceScope scope = scopeBar.getSelectedScope();
+        int row = table.getSelectedRow();
+        if (scope == null || row < 0) {
+            return;
+        }
+        HookEntry entry = tableModel.entryAt(row);
+        String suggestedSlug = SwingLayoutUtils.suggestCopyName(entry.getHook().getName(),
+            candidate -> Files.exists(KiroPaths.workspaceHooksDir(scope.workspaceRoot()).resolve(candidate + ".json")));
+
+        String slug = (String) JOptionPane.showInputDialog(this,
+            "Hook file name (lowercase, hyphenated, e.g. lint-on-save):", "Duplicate Hook",
+            JOptionPane.PLAIN_MESSAGE, null, null, suggestedSlug);
+        if (slug == null || slug.isBlank()) {
+            return;
+        }
+        slug = slug.trim();
+        if (!VALID_FILE_SLUG.matcher(slug).matches()) {
+            JOptionPane.showMessageDialog(this,
+                "File names should be lowercase letters, digits, and hyphens only.",
+                "Invalid Name", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        Hook copy = hookService.copy(entry.getHook());
+        copy.setName(slug);
+
+        HookEditDialog dialog = new HookEditDialog((Frame) SwingUtilities.getWindowAncestor(this), copy, true);
+        dialog.setVisible(true);
+        if (!dialog.isSaved()) {
+            return;
+        }
+        try {
+            hookService.createHookFile(scope.workspaceRoot(), slug, copy);
+            reloadTable();
+        } catch (IOException ex) {
+            logger.error("Failed to create hook file", ex);
+            JOptionPane.showMessageDialog(this, "Failed to save: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 

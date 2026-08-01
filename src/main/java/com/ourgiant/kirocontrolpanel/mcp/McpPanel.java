@@ -35,6 +35,7 @@ public class McpPanel extends JPanel {
     private final JTable table = new JTable(tableModel);
 
     private JButton editButton;
+    private JButton duplicateButton;
     private JButton removeButton;
     private JButton toggleEnabledButton;
     private JButton revealButton;
@@ -81,6 +82,9 @@ public class McpPanel extends JPanel {
         editButton.setMnemonic(KeyEvent.VK_E);
         editButton.addActionListener(e -> onEdit());
 
+        duplicateButton = new JButton("Duplicate...");
+        duplicateButton.addActionListener(e -> onDuplicate());
+
         toggleEnabledButton = new JButton("Enable/Disable");
         toggleEnabledButton.setMnemonic(KeyEvent.VK_T);
         toggleEnabledButton.addActionListener(e -> onToggleEnabled());
@@ -96,7 +100,7 @@ public class McpPanel extends JPanel {
         revealButton.addActionListener(e -> onReveal());
 
         return SwingLayoutUtils.createVerticalButtonPanel(
-            addButton, browseCatalogButton, editButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
+            addButton, browseCatalogButton, editButton, duplicateButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
     }
 
     private WorkspaceScope currentScope() {
@@ -128,6 +132,7 @@ public class McpPanel extends JPanel {
     private void updateButtonState() {
         boolean hasSelection = table.getSelectedRow() >= 0;
         editButton.setEnabled(hasSelection);
+        duplicateButton.setEnabled(hasSelection);
         removeButton.setEnabled(hasSelection);
         toggleEnabledButton.setEnabled(hasSelection);
     }
@@ -174,6 +179,24 @@ public class McpPanel extends JPanel {
         String name = tableModel.nameAt(row);
         McpServerEditDialog dialog =
             new McpServerEditDialog((Frame) SwingUtilities.getWindowAncestor(this), tableModel.getConfig(), name);
+        dialog.setVisible(true);
+        if (dialog.isSaved()) {
+            persist();
+            reloadTable();
+        }
+    }
+
+    private void onDuplicate() {
+        int row = table.getSelectedRow();
+        if (row < 0) {
+            return;
+        }
+        String originalName = tableModel.nameAt(row);
+        McpServerConfig original = tableModel.configAt(row);
+        String suggestedName = SwingLayoutUtils.suggestCopyName(originalName,
+            candidate -> tableModel.getConfig().getMcpServers().containsKey(candidate));
+        McpServerEditDialog dialog = new McpServerEditDialog(
+            (Frame) SwingUtilities.getWindowAncestor(this), tableModel.getConfig(), suggestedName, original);
         dialog.setVisible(true);
         if (dialog.isSaved()) {
             persist();

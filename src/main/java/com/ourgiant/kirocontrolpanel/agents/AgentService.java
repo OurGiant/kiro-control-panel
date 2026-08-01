@@ -1,6 +1,7 @@
 package com.ourgiant.kirocontrolpanel.agents;
 
 import com.fasterxml.jackson.core.PrettyPrinter;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
 import com.ourgiant.kirocontrolpanel.changelog.ChangeKind;
@@ -61,6 +62,18 @@ public class AgentService {
     public AgentConfig load(Path filePath, Path workspaceRoot) throws IOException {
         AgentConfig config = new AgentConfig(filePath, workspaceRoot);
         return mapper.readerForUpdating(config).readValue(filePath.toFile());
+    }
+
+    /**
+     * Deep-copies {@code source}'s data (including unmodeled fields carried in {@code extra})
+     * into a fresh config identified by {@code targetPath} -- for the Agents panel's "Duplicate"
+     * action. A manual field-by-field copy would silently drop anything only reachable via the
+     * Raw JSON tab.
+     */
+    public AgentConfig copy(AgentConfig source, Path targetPath, Path workspaceRoot) throws IOException {
+        AgentConfig copy = new AgentConfig(targetPath, workspaceRoot);
+        JsonNode tree = mapper.valueToTree(source);
+        return mapper.readerForUpdating(copy).readValue(tree);
     }
 
     public void save(AgentConfig config) throws IOException {
