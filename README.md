@@ -60,11 +60,13 @@ workspace for structural problems — invalid JSON/YAML, a stray skill file
 sitting outside its own subfolder, an un-wrapped hooks array, a server or
 hook missing a required field, and more. Mechanically-safe issues (a
 misplaced skill file, a bare hooks array) get a one-click "Fix..." with a
-preview before it's applied; everything else gets an "Edit..." button that
-opens the real in-app editor for that item — never an external app, so the
-fix stays under this app's own tracking. "Rescan" refreshes the list after
-fixing something. Runs silently on first launch (only shows up if it finds
-something) and on demand any time afterward.
+preview before it's applied, or "Fix All..." to apply every fixable
+finding in the list at once (useful when onboarding an existing `~/.kiro`
+tree with several fixable issues); everything else gets an "Edit..."
+button that opens the real in-app editor for that item — never an
+external app, so the fix stays under this app's own tracking. "Rescan"
+refreshes the list after fixing something. Runs silently on first launch
+(only shows up if it finds something) and on demand any time afterward.
 
 ### Change Log (Help > View Change Log...)
 
