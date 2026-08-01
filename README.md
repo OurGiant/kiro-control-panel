@@ -188,6 +188,11 @@ mvn clean test      # run unit tests
 mvn clean package   # build target/kiro-control-panel-all.jar
 ```
 
+A `Dockerfile` is included for a reproducible Maven+JDK 24 build
+environment (`docker build -t kiro-cp-maven .`) — see the comments in the
+Dockerfile for the build/run/exec commands. The app itself is a Swing GUI
+and must still run on the host, not inside the container.
+
 ## License
 
 See [LICENSE](LICENSE) for details.
