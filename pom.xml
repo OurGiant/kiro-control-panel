@@ -7,7 +7,7 @@
 
     <groupId>com.ourgiant</groupId>
     <artifactId>kiro-control-panel</artifactId>
-    <version>1.4.2</version>
+    <version>1.4.3</version>
     <packaging>jar</packaging>
 
     <name>Kiro Control Panel</name>
