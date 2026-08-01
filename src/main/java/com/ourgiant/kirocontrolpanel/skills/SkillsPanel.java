@@ -6,6 +6,7 @@ import com.ourgiant.kirocontrolpanel.WorkspaceScope;
 import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
+import com.ourgiant.kirocontrolpanel.util.TextFilter;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +36,8 @@ public class SkillsPanel extends JPanel {
 
     private final DefaultListModel<Skill> skillListModel = new DefaultListModel<>();
     private final JList<Skill> skillList = new JList<>(skillListModel);
+    private final JTextField filterField = SwingLayoutUtils.createFilterField(this::applyFilter);
+    private List<Skill> allSkills = List.of();
 
     private JButton editButton;
     private JButton duplicateButton;
@@ -75,7 +78,7 @@ public class SkillsPanel extends JPanel {
                 }
             }
         });
-        add(new JScrollPane(skillList), BorderLayout.CENTER);
+        add(SwingLayoutUtils.createFilterableContent(filterField, new JScrollPane(skillList)), BorderLayout.CENTER);
         add(createSideButtons(), BorderLayout.EAST);
 
         reloadSkillList();
@@ -105,13 +108,11 @@ public class SkillsPanel extends JPanel {
 
     private void reloadSkillList() {
         WorkspaceScope scope = scopeBar.getSelectedScope();
-        skillListModel.clear();
         if (scope != null) {
-            List<Skill> skills = scope.isGlobal()
+            allSkills = scope.isGlobal()
                 ? skillService.listGlobal()
                 : skillService.listWorkspace(scope.workspaceRoot());
-            for (Skill skill : skills) {
-                skillListModel.addElement(skill);
+            for (Skill skill : allSkills) {
                 // Watching only the parent skills/ dir catches add/remove of a whole
                 // skill folder, not edits to an existing skill's own files, so each
                 // skill's folder needs its own registration too.
@@ -120,6 +121,19 @@ public class SkillsPanel extends JPanel {
             watcher.watch(scope.isGlobal()
                 ? KiroPaths.globalSkillsDir()
                 : KiroPaths.workspaceSkillsDir(scope.workspaceRoot()));
+        } else {
+            allSkills = List.of();
+        }
+        applyFilter();
+    }
+
+    private void applyFilter() {
+        skillListModel.clear();
+        String query = filterField.getText();
+        for (Skill skill : allSkills) {
+            if (TextFilter.matches(skill.getSkillFolderName(), query)) {
+                skillListModel.addElement(skill);
+            }
         }
         updateButtonState();
     }

@@ -12,12 +12,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.regex.Pattern;
 
 /**
  * MCP servers tab: lists mcpServers from the current scope's mcp.json and
@@ -33,6 +35,8 @@ public class McpPanel extends JPanel {
 
     private final McpServerTableModel tableModel = new McpServerTableModel();
     private final JTable table = new JTable(tableModel);
+    private final TableRowSorter<McpServerTableModel> rowSorter = new TableRowSorter<>(tableModel);
+    private final JTextField filterField = SwingLayoutUtils.createFilterField(this::applyFilter);
 
     private JButton editButton;
     private JButton duplicateButton;
@@ -50,6 +54,7 @@ public class McpPanel extends JPanel {
         scopeBar.addScopeChangeListener(scope -> reloadTable());
         add(scopeBar, BorderLayout.NORTH);
 
+        table.setRowSorter(rowSorter);
         table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -64,7 +69,7 @@ public class McpPanel extends JPanel {
                 }
             }
         });
-        add(new JScrollPane(table), BorderLayout.CENTER);
+        add(SwingLayoutUtils.createFilterableContent(filterField, new JScrollPane(table)), BorderLayout.CENTER);
         add(createSideButtons(), BorderLayout.EAST);
 
         reloadTable();
@@ -137,6 +142,23 @@ public class McpPanel extends JPanel {
         toggleEnabledButton.setEnabled(hasSelection);
     }
 
+    private void applyFilter() {
+        String query = filterField.getText();
+        rowSorter.setRowFilter(query == null || query.isBlank()
+            ? null
+            : RowFilter.regexFilter("(?i)" + Pattern.quote(query)));
+    }
+
+    /**
+     * The table's row sorter means {@link JTable#getSelectedRow()} returns a view index, which
+     * only matches a model index (what {@link McpServerTableModel#nameAt}/{@code configAt} expect)
+     * when nothing is filtered/sorted -- always convert before indexing into the model.
+     */
+    private int selectedModelRow() {
+        int viewRow = table.getSelectedRow();
+        return viewRow < 0 ? -1 : table.convertRowIndexToModel(viewRow);
+    }
+
     private void persist() {
         WorkspaceScope scope = currentScope();
         if (scope == null) {
@@ -172,7 +194,7 @@ public class McpPanel extends JPanel {
     }
 
     private void onEdit() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }
@@ -205,7 +227,7 @@ public class McpPanel extends JPanel {
     }
 
     private void onToggleEnabled() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }
@@ -216,7 +238,7 @@ public class McpPanel extends JPanel {
     }
 
     private void onRemove() {
-        int row = table.getSelectedRow();
+        int row = selectedModelRow();
         if (row < 0) {
             return;
         }
