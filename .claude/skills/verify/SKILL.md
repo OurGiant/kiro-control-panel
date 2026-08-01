@@ -12,12 +12,14 @@ This file is what to actually type on *this* machine.
 
 ## Build here, run there
 
-Maven only exists in the `festive_bardeen` docker container, not on the
-host — but the host has Java (Corretto) and is where the real desktop
-session lives, so build in the container and run on the host:
+Maven only exists in a docker container built from this repo's
+`Dockerfile` (or a hand-set-up one like `festive_bardeen`, whose name can
+drift across sessions), not on the host — but the host has Java (Corretto)
+and is where the real desktop session lives, so build in the container and
+run on the host:
 
 ```bash
-docker exec -w /projects/kiro-control-panel festive_bardeen mvn -B package -DskipTests
+docker exec -w /projects/kiro-control-panel <container> mvn -B package -DskipTests
 # /projects is bind-mounted from the host's projects directory, so the jar lands at:
 java -jar target/kiro-control-panel-all.jar   # run this on the HOST, not in the container
 ```
