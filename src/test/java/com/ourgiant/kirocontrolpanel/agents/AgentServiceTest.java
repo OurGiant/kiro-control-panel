@@ -92,6 +92,29 @@ class AgentServiceTest {
     }
 
     @Test
+    void copyPreservesUnmodeledFieldsAndUsesTheNewIdentity() throws IOException {
+        AgentConfig source = new AgentConfig(agentsDir.resolve("original-agent.json"), workspaceRoot);
+        source.setDescription("original description");
+        source.setPrompt("original prompt");
+        source.setTools(List.of("read", "write"));
+        source.putExtra("mcpServers", java.util.Map.of("fetch", java.util.Map.of("command", "fetch-server")));
+
+        Path targetPath = agentsDir.resolve("original-agent-copy.json");
+        AgentConfig copy = service.copy(source, targetPath, workspaceRoot);
+
+        assertEquals(targetPath, copy.getFilePath());
+        assertEquals("original-agent-copy.json", copy.getFileName());
+        assertEquals("original description", copy.getDescription());
+        assertEquals("original prompt", copy.getPrompt());
+        assertEquals(List.of("read", "write"), copy.getTools());
+        assertTrue(copy.getExtra().containsKey("mcpServers"));
+
+        copy.setDescription("edited after copying");
+        assertEquals("original description", source.getDescription(), "mutating the copy must not affect the source");
+        assertEquals(source.getFilePath(), agentsDir.resolve("original-agent.json"), "the source's own identity is untouched");
+    }
+
+    @Test
     void listWorkspaceReturnsAllJsonFilesSorted() throws IOException {
         JsonMapperFactory.createMapper().writeValue(agentsDir.resolve("charlie.json").toFile(), new AgentConfig(null, null));
         JsonMapperFactory.createMapper().writeValue(agentsDir.resolve("alpha.json").toFile(), new AgentConfig(null, null));

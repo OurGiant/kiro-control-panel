@@ -27,7 +27,10 @@ panel makes it available in every other panel too, and a "Reveal File"
 action on each item opens its real location in the OS file manager. A live
 filter field above each panel's list narrows it to matching entries as you
 type — useful once a scope accumulates more MCP servers, docs, skills,
-hooks, or agents than fit on screen at once.
+hooks, or agents than fit on screen at once. A "Duplicate..." action on
+each item opens the same editor pre-filled with a copy of the selected
+item's data under a suggested new name — a faster starting point than
+"New..." when a new entry is mostly like an existing one.
 
 - **MCP Servers**: add/edit/enable/disable/remove entries in `mcp.json`,
   with a Form or Raw JSON editor for each server; a "Browse Catalog..."

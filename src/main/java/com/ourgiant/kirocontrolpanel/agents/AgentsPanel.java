@@ -41,6 +41,7 @@ public class AgentsPanel extends JPanel {
     private List<AgentConfig> allAgents = List.of();
 
     private JButton editButton;
+    private JButton duplicateButton;
     private JButton deleteButton;
     private JButton revealButton;
 
@@ -93,6 +94,9 @@ public class AgentsPanel extends JPanel {
         editButton.setMnemonic(KeyEvent.VK_E);
         editButton.addActionListener(e -> onEdit());
 
+        duplicateButton = new JButton("Duplicate...");
+        duplicateButton.addActionListener(e -> onDuplicate());
+
         deleteButton = new JButton("Delete");
         deleteButton.setMnemonic(KeyEvent.VK_D);
         deleteButton.addActionListener(e -> onDelete());
@@ -100,7 +104,7 @@ public class AgentsPanel extends JPanel {
         revealButton = new JButton("Reveal File...");
         revealButton.addActionListener(e -> onReveal());
 
-        return SwingLayoutUtils.createVerticalButtonPanel(newButton, editButton, deleteButton, revealButton);
+        return SwingLayoutUtils.createVerticalButtonPanel(newButton, editButton, duplicateButton, deleteButton, revealButton);
     }
 
     private void reloadAgentList() {
@@ -132,6 +136,7 @@ public class AgentsPanel extends JPanel {
     private void updateButtonState() {
         boolean hasSelection = agentList.getSelectedValue() != null;
         editButton.setEnabled(hasSelection);
+        duplicateButton.setEnabled(hasSelection);
         deleteButton.setEnabled(hasSelection);
         revealButton.setEnabled(hasSelection);
     }
@@ -194,6 +199,60 @@ public class AgentsPanel extends JPanel {
             logger.error("Failed to load agent config: {}", selected.getFilePath(), ex);
             JOptionPane.showMessageDialog(this,
                 "Failed to open: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onDuplicate() {
+        WorkspaceScope scope = scopeBar.getSelectedScope();
+        AgentConfig selected = agentList.getSelectedValue();
+        if (scope == null || selected == null) {
+            return;
+        }
+        String currentName = selected.getFileName();
+        String baseName = currentName.endsWith(".json")
+            ? currentName.substring(0, currentName.length() - ".json".length())
+            : currentName;
+        Path dir = scope.isGlobal() ? KiroPaths.globalAgentsDir() : KiroPaths.workspaceAgentsDir(scope.workspaceRoot());
+        String suggestedName = SwingLayoutUtils.suggestCopyName(baseName,
+            candidate -> Files.exists(dir.resolve(candidate + ".json")));
+
+        String fileName = (String) JOptionPane.showInputDialog(this,
+            "Agent file name (lowercase, hyphenated, e.g. aws-rust-agent):", "Duplicate Agent",
+            JOptionPane.PLAIN_MESSAGE, null, null, suggestedName);
+        if (fileName == null || fileName.isBlank()) {
+            return;
+        }
+        fileName = fileName.trim();
+        if (fileName.endsWith(".json")) {
+            fileName = fileName.substring(0, fileName.length() - ".json".length());
+        }
+        if (!VALID_AGENT_FILE_NAME.matcher(fileName).matches()) {
+            JOptionPane.showMessageDialog(this,
+                "Agent file names should be lowercase letters, digits, and hyphens only.",
+                "Invalid Name", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        fileName = fileName + ".json";
+        Path filePath = dir.resolve(fileName);
+        if (Files.exists(filePath)) {
+            JOptionPane.showMessageDialog(this,
+                "An agent named \"" + fileName + "\" already exists.", "Duplicate Agent", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try {
+            AgentConfig fresh = agentService.load(selected.getFilePath(), selected.getWorkspaceRoot());
+            AgentConfig copy = agentService.copy(fresh, filePath, scope.workspaceRoot());
+            AgentEditDialog dialog =
+                new AgentEditDialog((Frame) SwingUtilities.getWindowAncestor(this), copy, true);
+            dialog.setVisible(true);
+            if (dialog.isSaved()) {
+                persistThenReload(copy);
+            }
+        } catch (IOException ex) {
+            logger.error("Failed to duplicate agent config: {}", selected.getFilePath(), ex);
+            JOptionPane.showMessageDialog(this,
+                "Failed to duplicate: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 

@@ -32,6 +32,22 @@ public final class SwingLayoutUtils {
         return confirm == JOptionPane.YES_OPTION;
     }
 
+    /**
+     * Suggests "{@code base}-copy", falling back to "{@code base}-copy-2", "-copy-3", etc.
+     * until {@code taken} no longer matches -- the shared "Duplicate" naming convention every
+     * panel uses, whether {@code taken} checks a map key (MCP) or a file/folder's existence
+     * (Steering/Skills/Hooks/Agents).
+     */
+    public static String suggestCopyName(String base, java.util.function.Predicate<String> taken) {
+        String candidate = base + "-copy";
+        int n = 2;
+        while (taken.test(candidate)) {
+            candidate = base + "-copy-" + n;
+            n++;
+        }
+        return candidate;
+    }
+
     /** A text field that invokes {@code onChange} on every keystroke -- the live-filter-box pattern shared by every list/table panel. */
     public static JTextField createFilterField(Runnable onChange) {
         JTextField field = new JTextField();
