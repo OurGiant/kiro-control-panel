@@ -75,6 +75,16 @@ public class HookService {
         return filePath;
     }
 
+    /**
+     * Deep-copies a {@link Hook} (including its {@link HookAction} and both objects' unmodeled
+     * {@code extra} fields) via a Jackson round-trip, for the Hooks panel's "Duplicate" and
+     * "Copy to..." actions -- a manual field-by-field copy would silently drop anything only
+     * carried in {@code extra}.
+     */
+    public Hook copy(Hook original) {
+        return mapper.convertValue(original, Hook.class);
+    }
+
     /** Removes a hook from its file; deletes the file entirely if it was the last hook in it. */
     public void delete(HookEntry entry) throws IOException {
         entry.getFile().getHooks().remove(entry.getHook());

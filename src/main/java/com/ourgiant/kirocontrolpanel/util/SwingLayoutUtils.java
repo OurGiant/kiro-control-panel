@@ -29,4 +29,30 @@ public final class SwingLayoutUtils {
             JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         return confirm == JOptionPane.YES_OPTION;
     }
+
+    /**
+     * Suggests "{@code base}-copy", falling back to "{@code base}-copy-2", "-copy-3", etc.
+     * until {@code taken} no longer matches -- the shared "Duplicate" naming convention every
+     * panel uses, whether {@code taken} checks a map key (MCP) or a file/folder's existence
+     * (Steering/Skills/Hooks/Agents).
+     */
+    public static String suggestCopyName(String base, java.util.function.Predicate<String> taken) {
+        String candidate = base + "-copy";
+        int n = 2;
+        while (taken.test(candidate)) {
+            candidate = base + "-copy-" + n;
+            n++;
+        }
+        return candidate;
+    }
+
+    /**
+     * Like {@link #suggestCopyName}, but for "Copy to..." rather than "Duplicate": keeps the
+     * original name as-is if it's free at the destination (the common case -- copying to a
+     * scope that doesn't already have an item by this name), only falling back to the
+     * "-copy"/"-copy-2" suffix convention if the destination already has one.
+     */
+    public static String suggestNameAvoidingCollision(String base, java.util.function.Predicate<String> taken) {
+        return taken.test(base) ? suggestCopyName(base, taken) : base;
+    }
 }

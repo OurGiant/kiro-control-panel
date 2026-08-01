@@ -6,6 +6,7 @@ import com.ourgiant.kirocontrolpanel.WorkspaceScope;
 import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.RawJsonEditorDialog;
+import com.ourgiant.kirocontrolpanel.util.ScopePickerDialog;
 import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
@@ -18,6 +19,8 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * MCP servers tab: lists mcpServers from the current scope's mcp.json and
@@ -28,6 +31,7 @@ public class McpPanel extends JPanel {
     private static final Logger logger = LoggerFactory.getLogger(McpPanel.class);
 
     private final McpConfigService configService = new McpConfigService();
+    private final AppPreferences preferences;
     private final DirectoryWatcher watcher;
     private final WorkspaceScopeBar scopeBar;
 
@@ -35,6 +39,7 @@ public class McpPanel extends JPanel {
     private final JTable table = new JTable(tableModel);
 
     private JButton editButton;
+    private JButton copyToButton;
     private JButton removeButton;
     private JButton toggleEnabledButton;
     private JButton revealButton;
@@ -42,6 +47,7 @@ public class McpPanel extends JPanel {
     public McpPanel(AppPreferences preferences, DirectoryWatcher watcher) {
         super(new BorderLayout(8, 8));
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        this.preferences = preferences;
         this.watcher = watcher;
         watcher.addListener(this::reloadTable);
 
@@ -81,6 +87,9 @@ public class McpPanel extends JPanel {
         editButton.setMnemonic(KeyEvent.VK_E);
         editButton.addActionListener(e -> onEdit());
 
+        copyToButton = new JButton("Copy to...");
+        copyToButton.addActionListener(e -> onCopyTo());
+
         toggleEnabledButton = new JButton("Enable/Disable");
         toggleEnabledButton.setMnemonic(KeyEvent.VK_T);
         toggleEnabledButton.addActionListener(e -> onToggleEnabled());
@@ -96,7 +105,16 @@ public class McpPanel extends JPanel {
         revealButton.addActionListener(e -> onReveal());
 
         return SwingLayoutUtils.createVerticalButtonPanel(
-            addButton, browseCatalogButton, editButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
+            addButton, browseCatalogButton, editButton, copyToButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
+    }
+
+    /** Every scope (Global + pinned workspaces) other than {@code current} -- the destination choices for "Copy to...". */
+    private List<WorkspaceScope> otherScopes(WorkspaceScope current) {
+        List<WorkspaceScope> scopes = new ArrayList<>();
+        scopes.add(WorkspaceScope.global());
+        scopes.addAll(WorkspaceScope.pinnedWorkspaces(preferences));
+        scopes.remove(current);
+        return scopes;
     }
 
     private WorkspaceScope currentScope() {
@@ -128,6 +146,7 @@ public class McpPanel extends JPanel {
     private void updateButtonState() {
         boolean hasSelection = table.getSelectedRow() >= 0;
         editButton.setEnabled(hasSelection);
+        copyToButton.setEnabled(hasSelection);
         removeButton.setEnabled(hasSelection);
         toggleEnabledButton.setEnabled(hasSelection);
     }
@@ -178,6 +197,50 @@ public class McpPanel extends JPanel {
         if (dialog.isSaved()) {
             persist();
             reloadTable();
+        }
+    }
+
+    private void onCopyTo() {
+        WorkspaceScope current = currentScope();
+        int row = table.getSelectedRow();
+        if (current == null || row < 0) {
+            return;
+        }
+        List<WorkspaceScope> destinations = otherScopes(current);
+        if (destinations.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Pin another workspace first to copy to it.", "No Other Scopes", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        String name = tableModel.nameAt(row);
+        McpServerConfig original = tableModel.configAt(row);
+
+        ScopePickerDialog picker = new ScopePickerDialog(
+            (Frame) SwingUtilities.getWindowAncestor(this), name, destinations);
+        picker.setVisible(true);
+        if (!picker.isConfirmed()) {
+            return;
+        }
+        WorkspaceScope target = picker.getSelectedScope();
+
+        McpConfigFile targetConfig = target.isGlobal() ? configService.loadGlobal() : configService.loadWorkspace(target.workspaceRoot());
+        String targetName = SwingLayoutUtils.suggestNameAvoidingCollision(name, targetConfig.getMcpServers()::containsKey);
+
+        McpServerEditDialog dialog = new McpServerEditDialog(
+            (Frame) SwingUtilities.getWindowAncestor(this), targetConfig, targetName, original);
+        dialog.setVisible(true);
+        if (!dialog.isSaved()) {
+            return;
+        }
+        try {
+            if (target.isGlobal()) {
+                configService.saveGlobal(targetConfig);
+            } else {
+                configService.saveWorkspace(target.workspaceRoot(), targetConfig);
+            }
+        } catch (IOException ex) {
+            logger.error("Failed to copy MCP server \"{}\" to {}", name, target, ex);
+            JOptionPane.showMessageDialog(this, "Failed to copy: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 

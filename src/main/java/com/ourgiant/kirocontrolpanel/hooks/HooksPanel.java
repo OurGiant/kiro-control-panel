@@ -6,6 +6,7 @@ import com.ourgiant.kirocontrolpanel.WorkspaceScope;
 import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
 import com.ourgiant.kirocontrolpanel.util.RawJsonEditorDialog;
+import com.ourgiant.kirocontrolpanel.util.ScopePickerDialog;
 import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
 import com.ourgiant.kirocontrolpanel.util.WorkspaceScopeBar;
 import org.slf4j.Logger;
@@ -17,7 +18,9 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -33,6 +36,7 @@ public class HooksPanel extends JPanel {
     private static final int DEFAULT_TIMEOUT_SECONDS = 60;
 
     private final HookService hookService = new HookService();
+    private final AppPreferences preferences;
     private final DirectoryWatcher watcher;
     private final WorkspaceScopeBar scopeBar;
 
@@ -40,6 +44,7 @@ public class HooksPanel extends JPanel {
     private final JTable table = new JTable(tableModel);
 
     private JButton editButton;
+    private JButton copyToButton;
     private JButton removeButton;
     private JButton toggleEnabledButton;
     private JButton rawJsonButton;
@@ -48,6 +53,7 @@ public class HooksPanel extends JPanel {
     public HooksPanel(AppPreferences preferences, DirectoryWatcher watcher) {
         super(new BorderLayout(8, 8));
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        this.preferences = preferences;
         this.watcher = watcher;
         watcher.addListener(this::reloadTable);
 
@@ -84,6 +90,9 @@ public class HooksPanel extends JPanel {
         editButton.setMnemonic(KeyEvent.VK_E);
         editButton.addActionListener(e -> onEdit());
 
+        copyToButton = new JButton("Copy to...");
+        copyToButton.addActionListener(e -> onCopyTo());
+
         toggleEnabledButton = new JButton("Enable/Disable");
         toggleEnabledButton.setMnemonic(KeyEvent.VK_T);
         toggleEnabledButton.addActionListener(e -> onToggleEnabled());
@@ -99,7 +108,14 @@ public class HooksPanel extends JPanel {
         revealButton.addActionListener(e -> onReveal());
 
         return SwingLayoutUtils.createVerticalButtonPanel(
-            addButton, editButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
+            addButton, editButton, copyToButton, toggleEnabledButton, removeButton, rawJsonButton, revealButton);
+    }
+
+    /** Every OTHER pinned workspace -- hooks are workspace-only in Kiro, so Global is never a valid destination. */
+    private List<WorkspaceScope> otherScopes(WorkspaceScope current) {
+        List<WorkspaceScope> scopes = new ArrayList<>(WorkspaceScope.pinnedWorkspaces(preferences));
+        scopes.remove(current);
+        return scopes;
     }
 
     private void reloadTable() {
@@ -116,6 +132,7 @@ public class HooksPanel extends JPanel {
     private void updateButtonState() {
         boolean hasSelection = table.getSelectedRow() >= 0;
         editButton.setEnabled(hasSelection);
+        copyToButton.setEnabled(hasSelection);
         removeButton.setEnabled(hasSelection);
         toggleEnabledButton.setEnabled(hasSelection);
         rawJsonButton.setEnabled(hasSelection);
@@ -177,6 +194,48 @@ public class HooksPanel extends JPanel {
         dialog.setVisible(true);
         if (dialog.isSaved()) {
             persist(entry);
+        }
+    }
+
+    private void onCopyTo() {
+        WorkspaceScope current = scopeBar.getSelectedScope();
+        int row = table.getSelectedRow();
+        if (current == null || row < 0) {
+            return;
+        }
+        List<WorkspaceScope> destinations = otherScopes(current);
+        if (destinations.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Pin another workspace first to copy to it.", "No Other Scopes", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        HookEntry entry = tableModel.entryAt(row);
+        String name = entry.getHook().getName();
+
+        ScopePickerDialog picker = new ScopePickerDialog(
+            (Frame) SwingUtilities.getWindowAncestor(this), name, destinations);
+        picker.setVisible(true);
+        if (!picker.isConfirmed()) {
+            return;
+        }
+        WorkspaceScope target = picker.getSelectedScope();
+
+        String targetSlug = SwingLayoutUtils.suggestNameAvoidingCollision(name,
+            candidate -> Files.exists(KiroPaths.workspaceHooksDir(target.workspaceRoot()).resolve(candidate + ".json")));
+
+        Hook copy = hookService.copy(entry.getHook());
+        copy.setName(targetSlug);
+
+        HookEditDialog dialog = new HookEditDialog((Frame) SwingUtilities.getWindowAncestor(this), copy, true);
+        dialog.setVisible(true);
+        if (!dialog.isSaved()) {
+            return;
+        }
+        try {
+            hookService.createHookFile(target.workspaceRoot(), targetSlug, copy);
+        } catch (IOException ex) {
+            logger.error("Failed to copy hook \"{}\" to {}", name, target, ex);
+            JOptionPane.showMessageDialog(this, "Failed to copy: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
