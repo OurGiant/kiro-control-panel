@@ -13,7 +13,7 @@ class ChangeLogPanelTest {
 
     private ChangeLogEntry someEntry() {
         return new ChangeLogEntry(Instant.now().toEpochMilli(), "MCP", "Global", true,
-            "/home/x/.kiro/settings/mcp.json", "CREATED", "SELF");
+            "/home/x/.kiro/settings/mcp.json", "CREATED", "SELF", 0L);
     }
 
     @Test

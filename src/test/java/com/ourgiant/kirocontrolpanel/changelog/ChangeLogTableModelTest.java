@@ -22,7 +22,7 @@ class ChangeLogTableModelTest {
         ChangeLogTableModel model = new ChangeLogTableModel();
         ChangeLogEntry entry = new ChangeLogEntry(
             Instant.now().toEpochMilli(), "MCP", "Global", true,
-            "/home/x/.kiro/settings/mcp.json", "CREATED", "SELF");
+            "/home/x/.kiro/settings/mcp.json", "CREATED", "SELF", 0L);
 
         model.setEntries(List.of(entry));
 

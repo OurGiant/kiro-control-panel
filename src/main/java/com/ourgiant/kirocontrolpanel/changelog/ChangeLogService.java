@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Append-only JSON-lines record of changes to Kiro-managed files -- both
@@ -35,6 +36,10 @@ public final class ChangeLogService {
     private static final Logger logger = LoggerFactory.getLogger(ChangeLogService.class);
     private static final Object LOCK = new Object();
     private static final ObjectMapper MAPPER = JsonMapperFactory.createMapper();
+
+    /** Millisecond timestamps alone can't order entries recorded in the same millisecond
+     * (e.g. a batch "Fix All..." action); this breaks that tie deterministically. */
+    private static final AtomicLong SEQUENCE = new AtomicLong();
 
     private ChangeLogService() {
     }
@@ -79,7 +84,8 @@ public final class ChangeLogService {
             scope.global(),
             filePath.toAbsolutePath().normalize().toString(),
             kind.name(),
-            source.name());
+            source.name(),
+            SEQUENCE.getAndIncrement());
         synchronized (LOCK) {
             try {
                 Files.createDirectories(logFile.getParent());
@@ -119,7 +125,9 @@ public final class ChangeLogService {
         } catch (IOException e) {
             logger.warn("Failed to read change log {}", logFile, e);
         }
-        entries.sort(Comparator.comparingLong(ChangeLogEntry::timestampEpochMilli).reversed());
+        entries.sort(Comparator.comparingLong(ChangeLogEntry::timestampEpochMilli)
+            .thenComparingLong(ChangeLogEntry::sequence)
+            .reversed());
         return entries;
     }
 
