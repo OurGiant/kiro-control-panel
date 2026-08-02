@@ -19,7 +19,8 @@ public record ChangeLogEntry(
     boolean global,
     String filePath,
     String kind,
-    String source
+    String source,
+    long sequence
 ) {
     public Instant timestamp() {
         return Instant.ofEpochMilli(timestampEpochMilli);
