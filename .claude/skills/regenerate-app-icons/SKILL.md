@@ -1,13 +1,18 @@
 ---
 name: regenerate-app-icons
-description: Regenerate Kiro Control Panel's app icons (src/main/resources/app-icon.png, src/packaging/app-icon.ico, src/packaging/app-icon.icns) from the GIMP source at ~/Pictures/kiro-cp-logo.xcf. Covers exporting a square PNG from the .xcf via headless GIMP (flatpak batch-mode gotchas) and feeding it through ~/scripts/make_icon.py. Use whenever the logo/icon artwork changes.
+description: Regenerate Kiro Control Panel's app icons (src/main/resources/app-icon.png, src/packaging/linux/app-icon.png, src/packaging/app-icon.ico, src/packaging/app-icon.icns) from the GIMP source at ~/Pictures/kiro-cp-logo.xcf. Covers exporting a square PNG from the .xcf via headless GIMP (flatpak batch-mode gotchas) and feeding it through ~/scripts/make_icon.py. Use whenever the logo/icon artwork changes.
 ---
 
 # Regenerating Kiro Control Panel's app icons
 
-Three committed files, all generated from one master image:
+Four committed files, all generated from one master image:
 
-- `src/main/resources/app-icon.png` — Linux runtime icon (`jpackage --icon`, build.yml:95)
+- `src/main/resources/app-icon.png` — runtime classpath resource loaded by
+  `IconFactory` for the window titlebar/tray/About dialog on every platform
+  (unrelated to jpackage)
+- `src/packaging/linux/app-icon.png` — Linux jpackage input (`--icon`,
+  build.yml:95); identical bytes to the runtime copy above, duplicated
+  under `src/packaging/` per the packaging-asset convention (issue #114)
 - `src/packaging/app-icon.ico` — Windows (build.yml:45)
 - `src/packaging/app-icon.icns` — macOS (build.yml:148)
 
@@ -86,6 +91,7 @@ source ~/scripts/.venv/bin/activate   # Pillow lives here, not in system python3
 python3 ~/scripts/make_icon.py <square-source.png> -t icns -o src/packaging/app-icon.icns
 python3 ~/scripts/make_icon.py <square-source.png> -t ico  -o src/packaging/app-icon.ico
 cp <square-source.png> src/main/resources/app-icon.png
+cp <square-source.png> src/packaging/linux/app-icon.png
 ```
 
 `make_icon.py` does **not** enforce or check squareness — feeding it a
