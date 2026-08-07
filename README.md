@@ -90,7 +90,10 @@ Indexing runs in the background — an initial catch-up scan on launch, then
 live incremental updates as kiro-cli writes new sessions or appends to
 existing ones — so it never blocks the UI. A Sessions section in
 `File > Settings` controls whether indexing is on (default), where the
-index database lives, and offers a "Rebuild Index" button.
+index database lives, and offers "Rebuild Index" and "Clean Up Empty
+Sessions" buttons — the latter finds sessions with no prompt and no
+recorded messages (confirms the count with you first) and deletes them via
+`kiro-cli chat --delete-session`.
 
 ### Kiro Setup Scan (Help > Scan Kiro Setup...)
 

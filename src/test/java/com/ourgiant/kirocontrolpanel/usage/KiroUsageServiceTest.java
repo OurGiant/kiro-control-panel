@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -81,16 +80,5 @@ class KiroUsageServiceTest {
             () -> KiroUsageService.fetchUsage("kiro-cli-binary-that-does-not-exist-anywhere"));
 
         assertTrue(exception.getMessage().contains("isn't on your PATH"));
-    }
-
-    /** Regression test for issue #124: a throwaway "(no prompt)" session accumulated in
-     * ~/.kiro/sessions/cli/ on every single usage check, since ACP's session/new has no
-     * ephemeral-session concept. Cleanup is deliberately best-effort (see the method's own
-     * Javadoc) -- confirms a cleanup failure never propagates as an exception of its own,
-     * since that would turn "couldn't tidy up" into a worse failure than the original fetch. */
-    @Test
-    void deleteThrowawaySessionNeverThrowsEvenWhenTheBinaryIsMissing() {
-        assertDoesNotThrow(() ->
-            KiroUsageService.deleteThrowawaySession("kiro-cli-binary-that-does-not-exist-anywhere", "some-session-id"));
     }
 }

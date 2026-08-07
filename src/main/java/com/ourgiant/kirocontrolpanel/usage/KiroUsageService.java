@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ourgiant.kirocontrolpanel.util.AppVersion;
 import com.ourgiant.kirocontrolpanel.util.JsonMapperFactory;
+import com.ourgiant.kirocontrolpanel.util.KiroCliSessionDeleter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -131,34 +132,13 @@ public final class KiroUsageService {
         } catch (IOException e) {
             throw new UsageFetchException("Couldn't talk to kiro-cli: " + e.getMessage(), e);
         } finally {
+            // sessionId is only ever non-null once the "acp" process above has already started
+            // successfully against this exact binary, so delegating to the real-"kiro-cli"-only
+            // public overload is equivalent to passing `binary` through -- see
+            // KiroCliSessionDeleter's Javadoc for why deletion itself is best-effort/non-throwing.
             if (sessionId != null) {
-                deleteThrowawaySession(binary, sessionId);
+                KiroCliSessionDeleter.delete(sessionId);
             }
-        }
-    }
-
-    /** Best-effort cleanup of the throwaway session {@code session/new} persisted -- confirmed real
-     * via {@code kiro-cli chat --help}: {@code --delete-session <SESSION_ID>} deletes a saved chat
-     * session by ID, verified by hand against a real leftover session before wiring this in. Never
-     * throws: a failure here shouldn't turn a successful (or already-failed) usage fetch into an
-     * error, it just means one more session lingers until the next manual cleanup. */
-    static void deleteThrowawaySession(String binary, String sessionId) {
-        try {
-            Process process = new ProcessBuilder(binary, "chat", "--delete-session", sessionId)
-                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                .redirectError(ProcessBuilder.Redirect.DISCARD)
-                .start();
-            if (!process.waitFor(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                logger.warn("Timed out deleting throwaway usage-check session {}", sessionId);
-            } else if (process.exitValue() != 0) {
-                logger.warn("kiro-cli exited {} deleting throwaway usage-check session {}",
-                    process.exitValue(), sessionId);
-            }
-        } catch (IOException e) {
-            logger.warn("Failed to delete throwaway usage-check session {}", sessionId, e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 
