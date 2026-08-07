@@ -62,6 +62,7 @@ public class SessionsPanel extends JPanel {
     private final JTextArea summaryArea = new JTextArea();
     private final DefaultListModel<String> filesListModel = new DefaultListModel<>();
     private final JList<String> filesList = new JList<>(filesListModel);
+    private final JButton viewTranscriptButton = new JButton("View Transcript...");
     private final JButton viewRawJsonButton = new JButton("View Raw JSON...");
     private final JButton revealFileButton = new JButton("Reveal File");
     private final JButton revealSessionButton = new JButton("Reveal Session Files");
@@ -130,10 +131,12 @@ public class SessionsPanel extends JPanel {
         });
         panel.add(new JScrollPane(filesList), BorderLayout.CENTER);
 
+        viewTranscriptButton.addActionListener(e -> onViewTranscript());
         viewRawJsonButton.addActionListener(e -> onViewRawJson());
         revealFileButton.addActionListener(e -> onRevealFile());
         revealSessionButton.addActionListener(e -> onRevealSession());
-        panel.add(SwingLayoutUtils.createVerticalButtonPanel(viewRawJsonButton, revealFileButton, revealSessionButton),
+        panel.add(SwingLayoutUtils.createVerticalButtonPanel(
+                viewTranscriptButton, viewRawJsonButton, revealFileButton, revealSessionButton),
             BorderLayout.EAST);
 
         return panel;
@@ -231,6 +234,7 @@ public class SessionsPanel extends JPanel {
         filesListModel.clear();
         if (selectedManifest == null) {
             summaryArea.setText("");
+            viewTranscriptButton.setEnabled(false);
             viewRawJsonButton.setEnabled(false);
             revealFileButton.setEnabled(false);
             revealSessionButton.setEnabled(false);
@@ -241,6 +245,7 @@ public class SessionsPanel extends JPanel {
         for (String file : selectedManifest.filesTouched()) {
             filesListModel.addElement(file);
         }
+        viewTranscriptButton.setEnabled(true);
         viewRawJsonButton.setEnabled(true);
         revealFileButton.setEnabled(false);
         revealSessionButton.setEnabled(true);
@@ -254,6 +259,14 @@ public class SessionsPanel extends JPanel {
             + "Started via: " + manifest.sessionCreatedReason() + "\n"
             + "Messages: " + manifest.messageCount() + "\n"
             + "Prompt: " + (manifest.title() != null ? manifest.title() : "(none)");
+    }
+
+    private void onViewTranscript() {
+        if (selectedManifest == null) {
+            return;
+        }
+        new SessionTranscriptViewerDialog(InAppFileEditorLauncher.resolveFrame(this), selectedManifest)
+            .setVisible(true);
     }
 
     private void onViewRawJson() {
@@ -291,6 +304,11 @@ public class SessionsPanel extends JPanel {
     /** Package-private, for tests. */
     JLabel getStatusLabel() {
         return statusLabel;
+    }
+
+    /** Package-private, for tests. */
+    JButton getViewTranscriptButton() {
+        return viewTranscriptButton;
     }
 
     /** Package-private, for tests. */
