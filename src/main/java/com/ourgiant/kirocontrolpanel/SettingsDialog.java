@@ -1,9 +1,11 @@
 package com.ourgiant.kirocontrolpanel;
 
 import com.ourgiant.kirocontrolpanel.sessions.SessionIndexService;
+import com.ourgiant.kirocontrolpanel.sessions.SessionManifest;
 import com.ourgiant.kirocontrolpanel.snapshot.SnapshotFrequency;
 import com.ourgiant.kirocontrolpanel.snapshot.SnapshotService;
 import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
+import com.ourgiant.kirocontrolpanel.util.KiroCliSessionDeleter;
 import com.ourgiant.kirocontrolpanel.util.KiroSessionLauncher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +19,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -315,6 +318,8 @@ public class SettingsDialog extends JDialog {
         actionRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         JButton rebuildButton = new JButton("Rebuild Index");
         actionRow.add(rebuildButton);
+        JButton cleanupButton = new JButton("Clean Up Empty Sessions");
+        actionRow.add(cleanupButton);
 
         JLabel locationHint = new JLabel("Changing the location takes effect after restarting the app.");
         locationHint.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -366,6 +371,8 @@ public class SettingsDialog extends JDialog {
             worker.execute();
         });
 
+        cleanupButton.addActionListener(e -> onCleanUpEmptySessions(sessionIndexService, cleanupButton));
+
         section.add(enabledCheckbox);
         section.add(Box.createVerticalStrut(6));
         section.add(locationRow);
@@ -381,6 +388,77 @@ public class SettingsDialog extends JDialog {
     private static String describeIndexLocation(AppPreferences preferences) {
         String override = preferences.getSessionsIndexLocation();
         return override.isBlank() ? "(default) ~/.kiro-control-panel/sessions-index.db" : override;
+    }
+
+    /** Finds sessions with no title and no recorded messages ({@link SessionManifest#isEmpty()})
+     * -- shown as "(no prompt)" in the Sessions tab -- confirms with the user, then deletes each
+     * one via {@link KiroCliSessionDeleter} (the same mechanism issue #124's fix uses) and
+     * removes it from the index immediately rather than waiting for the file watcher. See #126. */
+    private void onCleanUpEmptySessions(SessionIndexService sessionIndexService, JButton cleanupButton) {
+        List<SessionManifest> emptySessions;
+        try {
+            emptySessions = sessionIndexService.listAll().stream().filter(SessionManifest::isEmpty).toList();
+        } catch (SQLException ex) {
+            logger.warn("Failed to check for empty sessions", ex);
+            JOptionPane.showMessageDialog(this,
+                "Couldn't check for empty sessions: " + ex.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        if (emptySessions.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "No empty sessions found.", "Clean Up Empty Sessions", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        int confirmed = JOptionPane.showConfirmDialog(this,
+            "Found " + emptySessions.size() + " empty session(s) (no prompt, no messages).\n"
+                + "Delete them from kiro-cli?",
+            "Clean Up Empty Sessions", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (confirmed != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        cleanupButton.setEnabled(false);
+        cleanupButton.setText("Cleaning Up...");
+        SwingWorker<int[], Void> worker = new SwingWorker<>() {
+            @Override
+            protected int[] doInBackground() {
+                int deleted = 0;
+                for (SessionManifest session : emptySessions) {
+                    if (KiroCliSessionDeleter.delete(session.sessionId())) {
+                        deleted++;
+                        try {
+                            sessionIndexService.removeSession(session.sessionId());
+                        } catch (SQLException ex) {
+                            logger.warn("Deleted session {} but failed to remove it from the index",
+                                session.sessionId(), ex);
+                        }
+                    }
+                }
+                return new int[] {deleted, emptySessions.size()};
+            }
+
+            @Override
+            protected void done() {
+                cleanupButton.setEnabled(true);
+                cleanupButton.setText("Clean Up Empty Sessions");
+                try {
+                    int[] result = get();
+                    JOptionPane.showMessageDialog(SettingsDialog.this,
+                        "Deleted " + result[0] + " of " + result[1] + " empty sessions.",
+                        "Clean Up Empty Sessions", JOptionPane.INFORMATION_MESSAGE);
+                } catch (Exception ex) {
+                    logger.warn("Empty session clean-up failed", ex);
+                    String detail = ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage();
+                    JOptionPane.showMessageDialog(SettingsDialog.this,
+                        "Clean-up failed: " + detail,
+                        "Clean-up Failed", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        };
+        worker.execute();
     }
 
     private JPanel buildWindowsSection(AppPreferences preferences) {
