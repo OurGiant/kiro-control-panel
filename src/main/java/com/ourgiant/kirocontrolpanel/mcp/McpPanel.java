@@ -41,6 +41,7 @@ public class McpPanel extends JPanel {
     private final JTable table = new JTable(tableModel);
     private final TableRowSorter<McpServerTableModel> rowSorter = new TableRowSorter<>(tableModel);
     private final JTextField filterField = SwingLayoutUtils.createFilterField(this::applyFilter);
+    private final JLabel registryWarningLabel = new JLabel(" ");
 
     private JButton editButton;
     private JButton duplicateButton;
@@ -58,7 +59,15 @@ public class McpPanel extends JPanel {
 
         scopeBar = new WorkspaceScopeBar(preferences);
         scopeBar.addScopeChangeListener(scope -> reloadTable());
-        add(scopeBar, BorderLayout.NORTH);
+
+        registryWarningLabel.setForeground(new Color(0xB35900));
+        registryWarningLabel.setVisible(false);
+
+        JPanel northPanel = new JPanel(new BorderLayout());
+        northPanel.add(scopeBar, BorderLayout.NORTH);
+        northPanel.add(registryWarningLabel, BorderLayout.SOUTH);
+        add(northPanel, BorderLayout.NORTH);
+        checkMcpRegistryStatus();
 
         table.setRowSorter(rowSorter);
         table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
@@ -129,6 +138,41 @@ public class McpPanel extends JPanel {
 
     private WorkspaceScope currentScope() {
         return scopeBar.getSelectedScope();
+    }
+
+    /**
+     * Best-effort, background, checked once per panel lifetime (app startup) -- see
+     * {@link McpRegistryStatusService} for what this actually detects and why it's confined to
+     * text-parsing kiro-cli's own CLI output. Never blocks the EDT and never shows anything for
+     * an inconclusive check; only a confidently-detected registry failure produces a warning.
+     */
+    private void checkMcpRegistryStatus() {
+        SwingWorker<McpRegistryStatus, Void> worker = new SwingWorker<>() {
+            @Override
+            protected McpRegistryStatus doInBackground() {
+                return McpRegistryStatusService.checkStatus();
+            }
+
+            @Override
+            protected void done() {
+                McpRegistryStatus status;
+                try {
+                    status = get();
+                } catch (Exception e) {
+                    logger.warn("MCP registry status check failed unexpectedly", e);
+                    return;
+                }
+                if (status.registryUnreachable()) {
+                    registryWarningLabel.setText(status.httpStatusCode() != null
+                        ? "⚠ Your organization's MCP registry is unreachable (HTTP " + status.httpStatusCode()
+                            + ") -- all MCP servers are currently unavailable, regardless of local configuration."
+                        : "⚠ Your organization's MCP registry is unreachable -- all MCP servers are "
+                            + "currently unavailable, regardless of local configuration.");
+                    registryWarningLabel.setVisible(true);
+                }
+            }
+        };
+        worker.execute();
     }
 
     private Path currentConfigPath() {

@@ -7,7 +7,6 @@ import com.ourgiant.kirocontrolpanel.changelog.ChangeLogPanel;
 import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupFindingsPanel;
 import com.ourgiant.kirocontrolpanel.hooks.HookFormPanel;
 import com.ourgiant.kirocontrolpanel.hooks.HooksPanel;
-import com.ourgiant.kirocontrolpanel.mcp.McpPanel;
 import com.ourgiant.kirocontrolpanel.mcp.McpServerFormPanel;
 import com.ourgiant.kirocontrolpanel.sessions.SessionIndexService;
 import com.ourgiant.kirocontrolpanel.sessions.SessionsPanel;
@@ -49,6 +48,12 @@ import static org.junit.jupiter.api.Assertions.assertAll;
  * never previously observed. Not a bug in this app's code, and not
  * reliably reproducible enough to assert against headlessly; covered only
  * by the manual verify/verify-java-swing process instead.
+ * <p>
+ * Also excludes {@code McpPanel} (issue #138): its constructor kicks off a background
+ * {@code McpRegistryStatusService.checkStatus()} check, which spawns real {@code kiro-cli}
+ * subprocesses -- same category of reason as {@code UsagePanel}'s exclusion above (a live
+ * external-process side effect from construction, not something this layout-only suite should
+ * trigger). Covered by the manual verify process instead.
  */
 class PanelLayoutClippingTest {
 
@@ -81,7 +86,6 @@ class PanelLayoutClippingTest {
     static Stream<Arguments> panels() {
         AppPreferences preferences = new AppPreferences();
         return Stream.of(
-            Arguments.of("McpPanel", (Supplier<JComponent>) () -> new McpPanel(preferences, watcher), NARROW_WIDTH),
             Arguments.of("SteeringPanel", (Supplier<JComponent>) () -> new SteeringPanel(preferences, watcher), NARROW_WIDTH),
             Arguments.of("SkillsPanel", (Supplier<JComponent>) () -> new SkillsPanel(preferences, watcher), NARROW_WIDTH),
             Arguments.of("HooksPanel", (Supplier<JComponent>) () -> new HooksPanel(preferences, watcher), NARROW_WIDTH),
