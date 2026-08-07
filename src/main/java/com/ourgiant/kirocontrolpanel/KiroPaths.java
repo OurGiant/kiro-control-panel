@@ -60,4 +60,16 @@ public final class KiroPaths {
     public static Path workspaceHooksDir(Path workspaceRoot) {
         return workspaceKiroDir(workspaceRoot).resolve("hooks");
     }
+
+    /**
+     * Where kiro-cli writes session transcripts (issue #117). Deliberately one level
+     * deeper than {@code sessions/} itself: {@link com.ourgiant.kirocontrolpanel.util.KiroFolderMonitor}
+     * skips any directory literally named {@code sessions} (its own {@code preVisitDirectory}
+     * check applies to a watch root too, not just subdirectories encountered during the walk),
+     * so a Sessions-tab watcher must be rooted here, at {@code sessions/cli}, not at
+     * {@code sessions} -- confirmed by reading that class before relying on it.
+     */
+    public static Path globalSessionsCliDir() {
+        return globalKiroHome().resolve("sessions").resolve("cli");
+    }
 }

@@ -63,6 +63,24 @@ why this path was chosen over the ones that were ruled out. Falls back to a
 static note pointing at `kiro-cli` → `/usage` if `kiro-cli` isn't installed
 or the call fails for any reason.
 
+### Sessions (tab)
+
+Indexes every kiro-cli session transcript under `~/.kiro/sessions/cli/` into
+a local SQLite/FTS5 database (never written under `~/.kiro` itself, so it
+never trips the external-change monitor or gets swept into snapshots) and
+shows them as a sortable table — date, working directory, opening prompt,
+files touched — with a detail pane for the selected session (manifest
+fields, touched files with "Reveal File", and "View Raw JSON..." for the
+session's own sidecar file). The filter field above the table narrows
+results in-memory as you type, same as every other panel; pressing Enter
+instead runs a full-text search over the indexed message content (never
+tool-call/result payloads) and shows ranked, snippet-highlighted matches.
+Indexing runs in the background — an initial catch-up scan on launch, then
+live incremental updates as kiro-cli writes new sessions or appends to
+existing ones — so it never blocks the UI. A Sessions section in
+`File > Settings` controls whether indexing is on (default), where the
+index database lives, and offers a "Rebuild Index" button.
+
 ### Kiro Setup Scan (Help > Scan Kiro Setup...)
 
 Scans MCP/Steering/Skills/Hooks/Agents across Global and every pinned
@@ -179,6 +197,7 @@ src/main/java/com/ourgiant/kirocontrolpanel/
 ├── diagnostics/              # Kiro Setup Scan (structural checks + fixes)
 ├── changelog/                # Change Log viewer + external-change watchers
 ├── snapshot/                 # Periodic .kiro backup (SnapshotService, SnapshotScheduler)
+├── sessions/                 # Sessions tab: SQLite/FTS5 index of kiro-cli session history
 ├── usage/                    # Live usage via kiro-cli's ACP interface (KiroUsageService)
 └── util/                     # FrontMatterParser, JsonMapperFactory,
                                # WorkspaceScopeBar, RawJsonEditorDialog, IconFactory,
@@ -191,6 +210,7 @@ src/main/java/com/ourgiant/kirocontrolpanel/
 - **SnakeYAML**: front-matter parsing for steering docs and `SKILL.md`
 - **FlatLaf**: modern Swing look and feel with themes
 - **SLF4J/Logback**: logging framework
+- **sqlite-jdbc**: local SQLite/FTS5 index for the Sessions tab
 - **JUnit 5 / Mockito**: testing
 
 ## Development

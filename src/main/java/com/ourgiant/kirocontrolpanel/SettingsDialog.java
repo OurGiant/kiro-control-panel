@@ -1,5 +1,6 @@
 package com.ourgiant.kirocontrolpanel;
 
+import com.ourgiant.kirocontrolpanel.sessions.SessionIndexService;
 import com.ourgiant.kirocontrolpanel.snapshot.SnapshotFrequency;
 import com.ourgiant.kirocontrolpanel.snapshot.SnapshotService;
 import com.ourgiant.kirocontrolpanel.util.GitAutoCommitter;
@@ -12,6 +13,7 @@ import java.awt.*;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -27,7 +29,7 @@ import java.util.Optional;
 public class SettingsDialog extends JDialog {
     private static final Logger logger = LoggerFactory.getLogger(SettingsDialog.class);
 
-    public SettingsDialog(Frame parent, AppPreferences preferences) {
+    public SettingsDialog(Frame parent, AppPreferences preferences, SessionIndexService sessionIndexService) {
         super(parent, "Settings", true);
 
         JPanel content = new JPanel();
@@ -41,6 +43,8 @@ public class SettingsDialog extends JDialog {
         content.add(buildGitSection(preferences));
         content.add(Box.createVerticalStrut(12));
         content.add(buildSnapshotSection(preferences));
+        content.add(Box.createVerticalStrut(12));
+        content.add(buildSessionsSection(preferences, sessionIndexService));
 
         if (KiroSessionLauncher.detect(System.getProperty("os.name")) == KiroSessionLauncher.Platform.WINDOWS) {
             content.add(Box.createVerticalStrut(12));
@@ -285,6 +289,98 @@ public class SettingsDialog extends JDialog {
             .withZone(ZoneId.systemDefault())
             .format(latest.get());
         return "Last snapshot: " + formatted;
+    }
+
+    private JPanel buildSessionsSection(AppPreferences preferences, SessionIndexService sessionIndexService) {
+        JPanel section = titledSection("Sessions");
+
+        JCheckBox enabledCheckbox = new JCheckBox(
+            "Index kiro-cli Session History", preferences.isSessionsIndexingEnabled());
+        enabledCheckbox.setAlignmentX(Component.LEFT_ALIGNMENT);
+        enabledCheckbox.addActionListener(e ->
+            preferences.setSessionsIndexingEnabled(enabledCheckbox.isSelected()));
+
+        JPanel locationRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        locationRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        locationRow.add(new JLabel("Index Location:"));
+        locationRow.add(Box.createHorizontalStrut(8));
+        JTextField locationField = new JTextField(describeIndexLocation(preferences), 22);
+        locationField.setEditable(false);
+        locationRow.add(locationField);
+        locationRow.add(Box.createHorizontalStrut(8));
+        JButton browseButton = new JButton("Browse...");
+        locationRow.add(browseButton);
+
+        JPanel actionRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        actionRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JButton rebuildButton = new JButton("Rebuild Index");
+        actionRow.add(rebuildButton);
+
+        JLabel locationHint = new JLabel("Changing the location takes effect after restarting the app.");
+        locationHint.setAlignmentX(Component.LEFT_ALIGNMENT);
+        locationHint.setFont(locationHint.getFont().deriveFont(locationHint.getFont().getSize2D() - 1f));
+        locationHint.setForeground(Color.GRAY);
+
+        JLabel hint = new JLabel("Never written under ~/.kiro -- lives in this app's own data directory.");
+        hint.setAlignmentX(Component.LEFT_ALIGNMENT);
+        hint.setFont(hint.getFont().deriveFont(hint.getFont().getSize2D() - 1f));
+        hint.setForeground(Color.GRAY);
+
+        browseButton.addActionListener(e -> {
+            JFileChooser chooser = new JFileChooser();
+            chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            chooser.setDialogTitle("Select Sessions Index Directory");
+            if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            Path dbFile = chooser.getSelectedFile().toPath().resolve("sessions-index.db");
+            preferences.setSessionsIndexLocation(dbFile.toString());
+            locationField.setText(describeIndexLocation(preferences));
+        });
+
+        rebuildButton.addActionListener(e -> {
+            rebuildButton.setEnabled(false);
+            rebuildButton.setText("Rebuilding...");
+            SwingWorker<Void, Void> worker = new SwingWorker<>() {
+                @Override
+                protected Void doInBackground() throws IOException, SQLException {
+                    sessionIndexService.rebuildIndex(KiroPaths.globalSessionsCliDir());
+                    return null;
+                }
+
+                @Override
+                protected void done() {
+                    rebuildButton.setEnabled(true);
+                    rebuildButton.setText("Rebuild Index");
+                    try {
+                        get();
+                    } catch (Exception ex) {
+                        logger.warn("Sessions index rebuild failed", ex);
+                        String detail = ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage();
+                        JOptionPane.showMessageDialog(SettingsDialog.this,
+                            "Rebuild failed: " + detail,
+                            "Rebuild Failed", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            };
+            worker.execute();
+        });
+
+        section.add(enabledCheckbox);
+        section.add(Box.createVerticalStrut(6));
+        section.add(locationRow);
+        section.add(Box.createVerticalStrut(4));
+        section.add(locationHint);
+        section.add(Box.createVerticalStrut(6));
+        section.add(actionRow);
+        section.add(Box.createVerticalStrut(4));
+        section.add(hint);
+        return section;
+    }
+
+    private static String describeIndexLocation(AppPreferences preferences) {
+        String override = preferences.getSessionsIndexLocation();
+        return override.isBlank() ? "(default) ~/.kiro-control-panel/sessions-index.db" : override;
     }
 
     private JPanel buildWindowsSection(AppPreferences preferences) {

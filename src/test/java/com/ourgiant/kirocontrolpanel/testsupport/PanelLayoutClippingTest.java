@@ -9,16 +9,22 @@ import com.ourgiant.kirocontrolpanel.hooks.HookFormPanel;
 import com.ourgiant.kirocontrolpanel.hooks.HooksPanel;
 import com.ourgiant.kirocontrolpanel.mcp.McpPanel;
 import com.ourgiant.kirocontrolpanel.mcp.McpServerFormPanel;
+import com.ourgiant.kirocontrolpanel.sessions.SessionIndexService;
+import com.ourgiant.kirocontrolpanel.sessions.SessionsPanel;
 import com.ourgiant.kirocontrolpanel.skills.SkillsPanel;
 import com.ourgiant.kirocontrolpanel.steering.SteeringPanel;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import javax.swing.JComponent;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.sql.SQLException;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -51,15 +57,25 @@ class PanelLayoutClippingTest {
     // Matches the diagnostic harness width that originally found and confirmed issue #18.
     private static final int NARROW_WIDTH = 300;
 
+    @TempDir
+    static Path tempDir;
+
     private static DirectoryWatcher watcher;
+    private static SessionIndexService sessionIndexService;
 
     @BeforeAll
-    static void setUp() throws IOException {
+    static void setUp() throws IOException, SQLException {
         // One shared instance for the whole class: no close()/shutdown exists on
         // DirectoryWatcher in this codebase, and nothing here registers a directory
         // or cares about watch behavior, so 9 separate WatchService handles would
         // be pure overhead.
         watcher = new DirectoryWatcher();
+        sessionIndexService = new SessionIndexService(tempDir.resolve("sessions-index.db"));
+    }
+
+    @AfterAll
+    static void tearDown() throws SQLException {
+        sessionIndexService.close();
     }
 
     static Stream<Arguments> panels() {
@@ -74,7 +90,9 @@ class PanelLayoutClippingTest {
             Arguments.of("HookFormPanel", (Supplier<JComponent>) HookFormPanel::new, NARROW_WIDTH),
             Arguments.of("AgentFormPanel", (Supplier<JComponent>) AgentFormPanel::new, NARROW_WIDTH),
             Arguments.of("KiroSetupFindingsPanel", (Supplier<JComponent>) KiroSetupFindingsPanel::new, NARROW_WIDTH),
-            Arguments.of("ChangeLogPanel", (Supplier<JComponent>) ChangeLogPanel::new, NARROW_WIDTH)
+            Arguments.of("ChangeLogPanel", (Supplier<JComponent>) ChangeLogPanel::new, NARROW_WIDTH),
+            Arguments.of("SessionsPanel",
+                (Supplier<JComponent>) () -> new SessionsPanel(preferences, sessionIndexService), NARROW_WIDTH)
         );
     }
 
