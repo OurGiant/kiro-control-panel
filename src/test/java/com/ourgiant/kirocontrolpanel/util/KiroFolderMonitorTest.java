@@ -171,14 +171,16 @@ class KiroFolderMonitorTest {
     }
 
     @ParameterizedTest(name = "ignores Kiro-managed state directory present at startup: {0}")
-    @ValueSource(strings = {"sessions", "extensions"})
+    @ValueSource(strings = {"sessions", "extensions", "logs"})
     @Timeout(30)
     void neverReportsChangesUnderKiroManagedStateDirectoryPresentAtStartup(String dirName)
             throws IOException, InterruptedException {
-        // Regression test for #74: kiro-cli writes new files under sessions/cli/ on every
-        // launch -- a different process, so SelfWriteTracker can never suppress it. sessions/
-        // and extensions/ are Kiro's own ephemeral state (same directories GitAutoCommitter
-        // already excludes from its own .gitignore for #49), not configuration content.
+        // Regression test for #74 (sessions/extensions) and #128 (logs): kiro-cli writes new
+        // files under sessions/cli/ and rotates a fresh timestamped directory under logs/ on
+        // every launch -- a different process, so SelfWriteTracker can never suppress it.
+        // sessions/ and extensions/ are Kiro's own ephemeral state (same directories
+        // GitAutoCommitter already excludes from its own .gitignore for #49); logs/ is the
+        // same category of ephemeral state, not configuration content.
         Path stateDir = Files.createDirectory(tempDir.resolve(dirName));
         CountDownLatch latch = new CountDownLatch(1);
         new KiroFolderMonitor(tempDir, events -> latch.countDown());
@@ -193,7 +195,7 @@ class KiroFolderMonitorTest {
     }
 
     @ParameterizedTest(name = "ignores Kiro-managed state directory created after startup: {0}")
-    @ValueSource(strings = {"sessions", "extensions"})
+    @ValueSource(strings = {"sessions", "extensions", "logs"})
     @Timeout(30)
     void neverReportsKiroManagedStateDirectoryCreatedAfterStartup(String dirName)
             throws IOException, InterruptedException {

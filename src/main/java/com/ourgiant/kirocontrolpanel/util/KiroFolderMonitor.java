@@ -63,18 +63,21 @@ import java.util.regex.Pattern;
  * doesn't produce a burst of one alert per swap-file-create/write/rename/swap-file-delete
  * step. See #62.
  * <p>
- * {@code sessions/} and {@code extensions/} are also ignored outright -- the same
- * "Kiro-managed, ephemeral session state" directories {@link GitAutoCommitter} already
- * excludes from its own .gitignore for #49. Kiro CLI writes new files under
- * {@code sessions/cli/} on every launch, which isn't a self-write this app's
- * {@link SelfWriteTracker} can know about (it's a different process), so without this
- * exclusion simply starting kiro-cli tripped the alert every time. See #74.
+ * {@code sessions/}, {@code extensions/}, and {@code logs/} are also ignored outright --
+ * Kiro-managed, ephemeral state, not configuration content. {@code sessions/}/{@code extensions/}
+ * are the same directories {@link GitAutoCommitter} already excludes from its own .gitignore
+ * for #49. Kiro CLI writes new files under {@code sessions/cli/} on every launch, and rotates a
+ * fresh timestamped directory under {@code logs/} (its own {@code kiro.log}/{@code mcp.log}/
+ * {@code powers.log}) on every launch too -- neither is a self-write this app's
+ * {@link SelfWriteTracker} can know about (it's a different process), so without these
+ * exclusions simply starting kiro-cli tripped the alert every time. See #74 (sessions/
+ * extensions) and #128 (logs).
  */
 public final class KiroFolderMonitor {
     private static final Logger logger = LoggerFactory.getLogger(KiroFolderMonitor.class);
     private static final int DEBOUNCE_MILLIS = 1000;
     private static final String GIT_INTERNAL_DIR_NAME = ".git";
-    private static final Set<String> KIRO_MANAGED_STATE_DIR_NAMES = Set.of("sessions", "extensions");
+    private static final Set<String> KIRO_MANAGED_STATE_DIR_NAMES = Set.of("sessions", "extensions", "logs");
     private static final Pattern EDITOR_ARTIFACT_PATTERN = Pattern.compile(
         "^\\..*\\.sw[a-z]$"    // vim swap file, e.g. .SKILL.md.swp
             + "|^4913$"         // vim's writability-check temp file
