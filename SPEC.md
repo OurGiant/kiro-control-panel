@@ -158,8 +158,12 @@ Kiro's own behavior.
 - SnakeYAML for front-matter parsing in steering/skill markdown.
 - slf4j + logback (logging).
 - JUnit 5 + Mockito (tests).
-- Explicitly **not** carried over from `aws-idp-saml-ui`: Selenium, AWS SDK,
-  ini4j, sqlite-jdbc — none of those are needed for pure file management.
+- Explicitly **not** carried over from `aws-idp-saml-ui` (v1): Selenium, AWS
+  SDK, ini4j — not needed for pure file management. **`sqlite-jdbc` was
+  added later** (issue #117, see its write-up below) once a feature
+  (FTS5 full-text search over session transcripts) came along that plain
+  JSONL genuinely couldn't satisfy — this v1 list reflects the original
+  reasoning at the time, not a standing rule against ever adding it.
 
 ## Proposed package layout
 
@@ -1167,3 +1171,138 @@ re-invokes the scanner and refreshes the panel, not just that the wiring
 compiles.
 
 247 tests total.
+
+## Sessions tab: SQLite/FTS5 index of kiro-cli session history (issue #117)
+
+Once a session ages out of `kiro-cli`'s own `/session`/`/chat` recall, the
+only way to find it again was raw filesystem `find`/`grep`. A new
+`sessions` package (structured like `changelog`/`diagnostics`: a service
+layer plus a plain testable `SessionsPanel`) indexes every session under
+`~/.kiro/sessions/cli/` into a local database and adds a "Sessions" tab —
+a manifest table (date/cwd/opening-prompt/files-touched) plus full-text
+search over transcript content.
+
+**Real schema, corrected twice against real data rather than assumed
+once.** The issue as originally filed assumed `~/.kiro/cli/<uuid>.jsonl`
+holding self-contained user/assistant/tool records. Inspecting the real
+(initially empty) session files on this dev machine found the actual path
+is `~/.kiro/sessions/cli/`, with each session split across up to three
+sibling files: a `<uuid>.json` sidecar (already carrying `cwd`,
+`created_at`/`updated_at`, and — usefully — a `title` kiro-cli
+auto-populates from the first prompt, so the manifest's "opening prompt"
+field often doesn't need a transcript walk at all) and a `<uuid>.jsonl`
+transcript. After seeding real CLI activity, the transcript line shape
+confirmed as `{"version":"v1","kind":<str>,"data":{...}}` with `kind` one
+of `Prompt`/`AssistantMessage`/`ToolResults`; tool calls appear as
+`AssistantMessage` content entries of kind `toolUse`, and their results
+land in the following `ToolResults` record under
+`results.<toolUseId>.tool.kind.BuiltIn.<ToolName>`. Only the `FileRead`
+shape was ever observed in real data — `SessionManifestParser` handles it
+explicitly (and deliberately excludes it from "files touched," since a
+read isn't a write or edit) and degrades unrecognized `BuiltIn` kinds to a
+debug log line rather than guessing a file-write/shell-exec shape that's
+never been confirmed. IDE sessions (`~/.kiro/sessions/<workspace-hash>/sess_<uuid>/`,
+a `messages.jsonl` with a completely different `{id, payload, timestamp}`
+record shape) were confirmed genuinely incompatible during the same
+research pass, validating the issue's own non-goal of deferring IDE
+support rather than requiring a change to it.
+
+**`org.xerial:sqlite-jdbc` is a new dependency, and a deliberate reversal**
+of this document's own prior "not needed for pure file management"
+stance (also the reasoning behind the Change Log feature's plain-JSONL
+choice). FTS5 ranked keyword search over transcript text is a genuinely
+different requirement JSONL can't satisfy — an index needs to be queried,
+not just appended to and re-read in full every time. `sqlite-jdbc`
+bundles native libraries per platform under `org/sqlite/native/`; the
+existing shade-plugin config already needed no changes to pick them up
+correctly (confirmed by inspecting the built `kiro-control-panel-all.jar`
+directly, not assumed) since its exclude filters only target
+`module-info`/signature files, and the `ServicesResourceTransformer`
+already in place merges `META-INF/services/java.sql.Driver` from the new
+dependency the same way it already merges every other bundled service
+file.
+
+**Own dedicated `KiroFolderMonitor`, rooted at `sessions/cli` exactly, not
+`sessions`.** Reading `KiroFolderMonitor` before relying on it surfaced a
+real gotcha: its `preVisitDirectory` skip check (it never watches anything
+literally named `sessions`/`extensions`, since those are Kiro's own
+ephemeral state) applies to the watch *root* itself, not just
+subdirectories encountered during the walk — rooting a watcher at
+`~/.kiro/sessions` would silently register nothing at all.
+`KiroPaths.globalSessionsCliDir()` returns the one-level-deeper path for
+exactly this reason, and a dedicated `SessionsWatcherTest` proves a
+monitor rooted there actually receives events, rather than trusting the
+reasoning alone. `SessionsWatcher` is its own instance, deliberately not
+reusing `TrayApp`'s global change-alert monitor or
+`ChangeLogWatcherManager`'s — the same "complete isolation" precedent
+`ChangeLogWatcherManager` itself already established for the same reason.
+
+**Incremental, never-blocking indexing.** Each session's row tracks a
+resumable transcript line offset, so an append-only `.jsonl` growing
+during a live session is never re-read from the start — `SessionsWatcher`'s
+callback reindexes just the touched file's delta. First-run/catch-up
+scanning of a potentially large existing session directory runs on its own
+daemon thread from `TrayApp.startSessions()`, matching
+`SnapshotScheduler`'s established "background daemon thread for real file
+I/O, `SwingWorker` reserved for genuine network calls" convention — never
+on the EDT. `SessionIndexService.setUpdateListener` lets `SessionsPanel`
+know when to reload, marshaled back to the EDT via
+`SwingUtilities.invokeLater`, the same cross-thread notification shape
+`KiroFolderMonitor`'s own debounced callback already uses.
+
+**No `WorkspaceScopeBar`.** Sessions carry a `cwd` per session but aren't
+pinned-workspace scoped the way MCP/Steering/etc. are — confirmed by
+precedent (`UsagePanel` and `ChangeLogPanel` both already skip it) rather
+than a new judgment call: one flat table across every session regardless
+of pinned workspaces, with `cwd` as a plain filterable/displayed column,
+matching exactly how `ChangeLogEntry` carries a per-row scope without a
+scope-bar UI construct.
+
+**A real bug, caught only by driving the actual UI against real
+production data, not by `mvn test` alone**: the filter field does double
+duty (keystroke = live in-memory substring filter; Enter = FTS5 search,
+the issue's own preferred interaction), and the first end-to-end pass
+found that a background reload arriving *while search results were still
+showing* (the live watcher indexing a session that arrived mid-verification
+— this machine had real concurrent kiro-cli activity during testing) fell
+back to re-applying the plain substring filter against whatever query text
+was still in the field. Since an FTS query like `architecture` rarely also
+matches as a literal cwd/title substring, this silently emptied or changed
+the visible results out from under the user with no warning. Fixed by
+tracking whether a search is currently active and having `reload()`
+re-run that same search instead of falling back to the live filter;
+`SessionsPanelTest` gained a dedicated regression test
+(`backgroundReloadWhileSearchResultsAreShowingReRunsTheSearchInsteadOfFallingBackToLiveFilter`)
+so this doesn't require live production data to catch again.
+
+**Settings**: a Sessions section in `File > Settings` mirrors the
+Snapshots section's exact shape — an enable checkbox (on by default here,
+unlike Snapshots' opt-in-off default, since this is read-only/local-only
+work and the tab is useless until it's run once), a location override
+(directory picker; takes effect after restart, since migrating an
+already-open JDBC connection to a new file live was judged not worth the
+complexity for v1), and a "Rebuild Index" button using the identical
+`SwingWorker` disable/relabel/restore/catch-and-`JOptionPane` shape as
+"Snapshot Now."
+
+**Security tie-in, as the issue itself requested**: because the index
+makes all transcript content searchable, it doubles as an audit surface —
+searching sessions for a suspicious string (an unexpected URL, an injected
+instruction, an unfamiliar command) is now a single FTS query instead of a
+manual `grep` across every session file, directly supporting the same
+adversarial-poisoning-detection rationale documented for external change
+monitoring (#50) above.
+
+**Verified end-to-end against real, already-populated production data on
+this dev machine**, not just unit-tested: a driven-UI harness launched the
+real app in-process (`Window.getWindows()`/reflection, per this project's
+`verify-java-swing` technique), confirmed the Sessions tab lists real
+seeded sessions with correct manifest fields, that selecting a row and
+clicking "View Raw JSON..." opens the real sidecar content, that the live
+filter narrows rows and clears back to the full list, that Enter runs a
+real FTS5 search returning ranked snippet matches, and that
+`File > Settings`' new Sessions section renders with working
+enable/location/rebuild controls — the search/reload regression above was
+found and fixed during this same pass.
+
+301 tests total.

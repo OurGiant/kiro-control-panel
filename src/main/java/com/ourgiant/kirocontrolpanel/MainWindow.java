@@ -7,6 +7,8 @@ import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanDialog;
 import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanner;
 import com.ourgiant.kirocontrolpanel.hooks.HooksPanel;
 import com.ourgiant.kirocontrolpanel.mcp.McpPanel;
+import com.ourgiant.kirocontrolpanel.sessions.SessionIndexService;
+import com.ourgiant.kirocontrolpanel.sessions.SessionsPanel;
 import com.ourgiant.kirocontrolpanel.skills.SkillsPanel;
 import com.ourgiant.kirocontrolpanel.steering.SteeringPanel;
 import com.ourgiant.kirocontrolpanel.usage.UsagePanel;
@@ -29,12 +31,14 @@ public class MainWindow extends JFrame {
     private static final Dimension MINIMUM_SIZE = new Dimension(640, 480);
 
     private final AppPreferences preferences;
+    private final SessionIndexService sessionIndexService;
     private Runnable quitHandler = () -> System.exit(0);
     private Consumer<Boolean> alertsPauseHandler = paused -> { };
 
-    public MainWindow(AppPreferences preferences, DirectoryWatcher watcher) {
+    public MainWindow(AppPreferences preferences, DirectoryWatcher watcher, SessionIndexService sessionIndexService) {
         super("Kiro Control Panel");
         this.preferences = preferences;
+        this.sessionIndexService = sessionIndexService;
 
         setIconImage(IconFactory.createAppIcon(64));
         setJMenuBar(createMenuBar());
@@ -45,6 +49,7 @@ public class MainWindow extends JFrame {
         tabs.addTab("Skills", new SkillsPanel(preferences, watcher));
         tabs.addTab("Hooks", new HooksPanel(preferences, watcher));
         tabs.addTab("Agents", new AgentsPanel(preferences, watcher));
+        tabs.addTab("Sessions", new SessionsPanel(preferences, sessionIndexService));
         tabs.addTab("Usage", new UsagePanel());
         setContentPane(tabs);
 
@@ -80,7 +85,7 @@ public class MainWindow extends JFrame {
 
         JMenuItem settingsItem = new JMenuItem("Settings...");
         settingsItem.setMnemonic(KeyEvent.VK_S);
-        settingsItem.addActionListener(e -> new SettingsDialog(this, preferences).setVisible(true));
+        settingsItem.addActionListener(e -> new SettingsDialog(this, preferences, sessionIndexService).setVisible(true));
         fileMenu.add(settingsItem);
 
         fileMenu.addSeparator();

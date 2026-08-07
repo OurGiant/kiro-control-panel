@@ -26,6 +26,8 @@ public class AppPreferences {
     private static final String KEY_SNAPSHOT_DESTINATION = "snapshotDestination";
     private static final String KEY_SNAPSHOT_FREQUENCY_MINUTES = "snapshotFrequencyMinutes";
     private static final String KEY_SNAPSHOT_RETENTION_COUNT = "snapshotRetentionCount";
+    private static final String KEY_SESSIONS_INDEXING_ENABLED = "sessionsIndexingEnabled";
+    private static final String KEY_SESSIONS_INDEX_LOCATION = "sessionsIndexLocation";
 
     private static final String WORKSPACE_DELIMITER = "\n";
     private static final String DEFAULT_THEME = "GitHub Dark";
@@ -179,5 +181,27 @@ public class AppPreferences {
 
     public void setSnapshotRetentionCount(int count) {
         prefs.putInt(KEY_SNAPSHOT_RETENTION_COUNT, count);
+    }
+
+    /**
+     * On by default -- unlike Snapshot's opt-in default, this is read-only/local-only work
+     * (never writes anything outside the app's own data directory) and the Sessions tab is
+     * useless until it's run at least once. See #117.
+     */
+    public boolean isSessionsIndexingEnabled() {
+        return prefs.getBoolean(KEY_SESSIONS_INDEXING_ENABLED, true);
+    }
+
+    public void setSessionsIndexingEnabled(boolean enabled) {
+        prefs.putBoolean(KEY_SESSIONS_INDEXING_ENABLED, enabled);
+    }
+
+    /** Empty string means "use the default location" ({@code ~/.kiro-control-panel/sessions-index.db}). */
+    public String getSessionsIndexLocation() {
+        return prefs.get(KEY_SESSIONS_INDEX_LOCATION, "");
+    }
+
+    public void setSessionsIndexLocation(String absolutePath) {
+        prefs.put(KEY_SESSIONS_INDEX_LOCATION, absolutePath);
     }
 }

@@ -4,6 +4,9 @@ import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
 import com.ourgiant.kirocontrolpanel.changelog.ChangeLogWatcherManager;
 import com.ourgiant.kirocontrolpanel.diagnostics.Finding;
 import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanDialog;
+import com.ourgiant.kirocontrolpanel.sessions.SessionIndexPaths;
+import com.ourgiant.kirocontrolpanel.sessions.SessionIndexService;
+import com.ourgiant.kirocontrolpanel.sessions.SessionsWatcher;
 import com.ourgiant.kirocontrolpanel.snapshot.SnapshotScheduler;
 import com.ourgiant.kirocontrolpanel.util.AppVersion;
 import com.ourgiant.kirocontrolpanel.util.DirectoryWatcher;
@@ -23,7 +26,9 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -47,6 +52,7 @@ public class TrayApp {
     private final NotificationThrottle externalChangeNotificationThrottle =
         new NotificationThrottle(EXTERNAL_CHANGE_NOTIFICATION_COOLDOWN);
     private MainWindow mainWindow;
+    private SessionIndexService sessionIndexService;
     private TrayIcon trayIcon;
     private boolean dockReopenSupported;
     // Session-only (see MainWindow's "Pause Change Alerts" File menu item, #66) -- deliberately
@@ -75,7 +81,13 @@ public class TrayApp {
             throw new UncheckedIOException("Failed to start file watcher", e);
         }
 
-        mainWindow = new MainWindow(preferences, watcher);
+        try {
+            sessionIndexService = new SessionIndexService(SessionIndexPaths.defaultIndexFile(preferences));
+        } catch (IOException | SQLException e) {
+            throw new RuntimeException("Failed to open sessions index", e);
+        }
+
+        mainWindow = new MainWindow(preferences, watcher, sessionIndexService);
         mainWindow.setQuitHandler(this::exitApplication);
         mainWindow.setAlertsPauseHandler(paused -> alertsPausedForSession = paused);
         mainWindow.addWindowListener(new WindowAdapter() {
@@ -95,6 +107,7 @@ public class TrayApp {
         startGlobalKiroFolderMonitor();
         startChangeLog();
         startSnapshotScheduler();
+        startSessions();
         mainWindow.setVisible(true);
         syncWindowPositionWithWindowManager(mainWindow);
 
@@ -253,6 +266,37 @@ public class TrayApp {
      */
     private void startSnapshotScheduler() {
         new SnapshotScheduler(preferences).start();
+    }
+
+    /**
+     * On by default (see {@code AppPreferences#isSessionsIndexingEnabled}): an initial
+     * background catch-up scan of {@code ~/.kiro/sessions/cli} -- never on the EDT, since an
+     * existing session directory can be large -- plus a dedicated live watcher (own,
+     * isolated {@code KiroFolderMonitor} instance, same "complete isolation" precedent as
+     * {@link #startChangeLog()}) so sessions written while this app is running show up
+     * without a manual rescan. See issue #117.
+     */
+    private void startSessions() {
+        if (!preferences.isSessionsIndexingEnabled()) {
+            return;
+        }
+        Path sessionsCliDir = KiroPaths.globalSessionsCliDir();
+
+        Thread indexingThread = new Thread(() -> {
+            try {
+                sessionIndexService.scanAndIndex(sessionsCliDir);
+            } catch (IOException | SQLException e) {
+                logger.warn("Failed to index kiro-cli session history", e);
+            }
+        }, "kiro-sessions-index");
+        indexingThread.setDaemon(true);
+        indexingThread.start();
+
+        try {
+            new SessionsWatcher(sessionsCliDir, sessionIndexService).start();
+        } catch (IOException e) {
+            logger.warn("Failed to start sessions folder watcher", e);
+        }
     }
 
     private void notifyGlobalKiroChanged() {
