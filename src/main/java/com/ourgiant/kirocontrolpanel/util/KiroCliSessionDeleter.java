@@ -43,12 +43,16 @@ public final class KiroCliSessionDeleter {
 
     /** Package-private seam for tests: lets a nonexistent binary name exercise the failure path. */
     static boolean delete(String binary, String sessionId) {
-        if (!isWellFormedSessionId(sessionId)) {
+        UUID parsedSessionId = parseSessionId(sessionId);
+        if (parsedSessionId == null) {
             logger.warn("Refusing to delete kiro-cli session with a malformed id: {}", sessionId);
             return false;
         }
+        // Deliberately pass parsedSessionId.toString() below, not the original sessionId
+        // parameter -- ProcessBuilder's argument must be derived from the validated UUID object,
+        // not the raw tainted string, or the taint never actually clears.
         try {
-            Process process = new ProcessBuilder(binary, "chat", "--delete-session", sessionId)
+            Process process = new ProcessBuilder(binary, "chat", "--delete-session", parsedSessionId.toString())
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .redirectError(ProcessBuilder.Redirect.DISCARD)
                 .start();
@@ -71,15 +75,14 @@ public final class KiroCliSessionDeleter {
         }
     }
 
-    private static boolean isWellFormedSessionId(String sessionId) {
+    private static UUID parseSessionId(String sessionId) {
         if (sessionId == null) {
-            return false;
+            return null;
         }
         try {
-            UUID.fromString(sessionId);
-            return true;
+            return UUID.fromString(sessionId);
         } catch (IllegalArgumentException e) {
-            return false;
+            return null;
         }
     }
 }
