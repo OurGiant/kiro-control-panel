@@ -20,9 +20,13 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import java.awt.BorderLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -62,6 +66,7 @@ public class SessionsPanel extends JPanel {
     private final JTextArea summaryArea = new JTextArea();
     private final DefaultListModel<String> filesListModel = new DefaultListModel<>();
     private final JList<String> filesList = new JList<>(filesListModel);
+    private final JButton viewTranscriptButton = new JButton("View Transcript...");
     private final JButton viewRawJsonButton = new JButton("View Raw JSON...");
     private final JButton revealFileButton = new JButton("Reveal File");
     private final JButton revealSessionButton = new JButton("Reveal Session Files");
@@ -99,6 +104,16 @@ public class SessionsPanel extends JPanel {
                 updateDetailPane();
             }
         });
+        // JTable selects the clicked row on mousePressed, synchronously ahead of this
+        // mouseClicked dispatch on the same EDT, so selectedManifest is already current here.
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && table.getSelectedRow() >= 0) {
+                    onViewTranscript();
+                }
+            }
+        });
 
         JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(table), buildDetailPanel());
         split.setResizeWeight(0.6);
@@ -130,10 +145,12 @@ public class SessionsPanel extends JPanel {
         });
         panel.add(new JScrollPane(filesList), BorderLayout.CENTER);
 
+        viewTranscriptButton.addActionListener(e -> onViewTranscript());
         viewRawJsonButton.addActionListener(e -> onViewRawJson());
         revealFileButton.addActionListener(e -> onRevealFile());
         revealSessionButton.addActionListener(e -> onRevealSession());
-        panel.add(SwingLayoutUtils.createVerticalButtonPanel(viewRawJsonButton, revealFileButton, revealSessionButton),
+        panel.add(SwingLayoutUtils.createVerticalButtonPanel(
+                viewTranscriptButton, viewRawJsonButton, revealFileButton, revealSessionButton),
             BorderLayout.EAST);
 
         return panel;
@@ -231,16 +248,19 @@ public class SessionsPanel extends JPanel {
         filesListModel.clear();
         if (selectedManifest == null) {
             summaryArea.setText("");
+            viewTranscriptButton.setEnabled(false);
             viewRawJsonButton.setEnabled(false);
             revealFileButton.setEnabled(false);
             revealSessionButton.setEnabled(false);
             return;
         }
 
-        summaryArea.setText(summaryText(selectedManifest));
+        summaryArea.setText(summaryText(selectedManifest) + "\n\n" + statsText(selectedManifest)
+            + "\n" + usageText(selectedManifest));
         for (String file : selectedManifest.filesTouched()) {
             filesListModel.addElement(file);
         }
+        viewTranscriptButton.setEnabled(true);
         viewRawJsonButton.setEnabled(true);
         revealFileButton.setEnabled(false);
         revealSessionButton.setEnabled(true);
@@ -252,8 +272,49 @@ public class SessionsPanel extends JPanel {
             + "Started: " + SUMMARY_TIMESTAMP_FORMAT.format(manifest.createdAt()) + "\n"
             + "Last activity: " + SUMMARY_TIMESTAMP_FORMAT.format(manifest.updatedAt()) + "\n"
             + "Started via: " + manifest.sessionCreatedReason() + "\n"
-            + "Messages: " + manifest.messageCount() + "\n"
             + "Prompt: " + (manifest.title() != null ? manifest.title() : "(none)");
+    }
+
+    /** Computed on demand from the parsed transcript rather than stored in the index --
+     * see {@link SessionStats}. */
+    private String statsText(SessionManifest manifest) {
+        try {
+            List<TranscriptMessage> messages =
+                SessionManifestParser.parseTranscript(manifest.sourceJsonl(), 0).messages();
+            Duration duration = Duration.between(manifest.createdAt(), manifest.updatedAt());
+            return SessionStats.format(SessionStats.summarize(messages, duration));
+        } catch (IOException e) {
+            logger.warn("Failed to compute session stats for {}", manifest.sessionId(), e);
+            return "Stats unavailable: " + e.getMessage();
+        }
+    }
+
+    /** Credit/context-window usage, parsed on demand from the {@code <uuid>.json} sidecar --
+     * see {@link SessionManifestParser#parseUsage}. */
+    private String usageText(SessionManifest manifest) {
+        try {
+            SessionUsage usage = SessionManifestParser.parseUsage(manifest.sourceJson());
+            String contextLine = usage.contextUsagePercentage() != null
+                ? "Context usage: " + String.format(Locale.ROOT, "%.1f%%", usage.contextUsagePercentage())
+                    + (usage.contextWindowTokens() != null
+                        ? " of " + String.format(Locale.ROOT, "%,d", usage.contextWindowTokens()) + " tokens" : "")
+                    + (usage.modelId() != null ? " (" + usage.modelId() + ")" : "")
+                : "Context usage: not available yet (no completed turn)";
+            return "Turns: " + usage.turnCount() + "\n"
+                + "Credits used: " + String.format(Locale.ROOT, "%.2f", usage.totalCredits()) + "\n"
+                + contextLine;
+        } catch (IOException e) {
+            logger.warn("Failed to compute session usage for {}", manifest.sessionId(), e);
+            return "Usage unavailable: " + e.getMessage();
+        }
+    }
+
+    private void onViewTranscript() {
+        if (selectedManifest == null) {
+            return;
+        }
+        new SessionTranscriptViewerDialog(InAppFileEditorLauncher.resolveFrame(this), selectedManifest)
+            .setVisible(true);
     }
 
     private void onViewRawJson() {
@@ -284,6 +345,11 @@ public class SessionsPanel extends JPanel {
     }
 
     /** Package-private, for tests. */
+    JTextArea getSummaryArea() {
+        return summaryArea;
+    }
+
+    /** Package-private, for tests. */
     JTable getTable() {
         return table;
     }
@@ -291,6 +357,11 @@ public class SessionsPanel extends JPanel {
     /** Package-private, for tests. */
     JLabel getStatusLabel() {
         return statusLabel;
+    }
+
+    /** Package-private, for tests. */
+    JButton getViewTranscriptButton() {
+        return viewTranscriptButton;
     }
 
     /** Package-private, for tests. */

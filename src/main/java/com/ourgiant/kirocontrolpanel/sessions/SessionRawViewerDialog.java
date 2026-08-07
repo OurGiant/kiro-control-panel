@@ -19,12 +19,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Read-only viewer for a session's {@code <uuid>.json} sidecar. Deliberately
- * not a reuse of {@code util.RawJsonEditorDialog} -- that one is editable and
- * wired into {@code ChangeLogService}/{@code GitAutoCommitter}/self-write
- * tracking, the wrong shape for viewing a file this app doesn't own or write
- * to. Per issue #117's non-goals, this app doesn't render the full transcript
- * -- "Reveal File" plus an external editor covers that.
+ * Read-only viewer for a session's {@code <uuid>.json} sidecar (the manifest
+ * metadata -- cwd, timestamps, title, reason). Deliberately not a reuse of
+ * {@code util.RawJsonEditorDialog} -- that one is editable and wired into
+ * {@code ChangeLogService}/{@code GitAutoCommitter}/self-write tracking, the
+ * wrong shape for viewing a file this app doesn't own or write to. For the
+ * actual conversation content, see {@link SessionTranscriptViewerDialog}
+ * (issue #120) -- this dialog never shows {@code <uuid>.jsonl} content.
  */
 public class SessionRawViewerDialog extends JDialog {
 

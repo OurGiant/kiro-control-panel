@@ -87,13 +87,38 @@ class SessionsPanelTest {
     void selectingARowEnablesDetailActionsAndClearingSelectionDisablesThem() throws Exception {
         try (SessionIndexService indexService = indexServiceWithTwoSessions()) {
             SessionsPanel panel = new SessionsPanel(new AppPreferences(), indexService);
+            assertFalse(panel.getViewTranscriptButton().isEnabled());
             assertFalse(panel.getViewRawJsonButton().isEnabled());
 
             panel.getTable().setRowSelectionInterval(0, 0);
+            assertTrue(panel.getViewTranscriptButton().isEnabled());
             assertTrue(panel.getViewRawJsonButton().isEnabled());
 
             panel.getTable().clearSelection();
+            assertFalse(panel.getViewTranscriptButton().isEnabled());
             assertFalse(panel.getViewRawJsonButton().isEnabled());
+        }
+    }
+
+    @Test
+    void selectingARowShowsComputedStatsAlongsideTheManifestSummary() throws Exception {
+        try (SessionIndexService indexService = indexServiceWithTwoSessions()) {
+            SessionsPanel panel = new SessionsPanel(new AppPreferences(), indexService);
+
+            panel.getTable().setRowSelectionInterval(0, 0);
+
+            // Each fixture session has exactly one Prompt line and no AssistantMessage --
+            // see indexServiceWithTwoSessions -- so the stats block should reflect that.
+            String summary = panel.getSummaryArea().getText();
+            assertTrue(summary.contains("Messages: 1 (1 you / 0 Kiro)"));
+            assertTrue(summary.contains("Duration:"));
+            assertTrue(summary.contains("Words exchanged:"));
+            assertTrue(summary.contains("Longest reply:"));
+            // Fixture sidecars have no session_state -- parseUsage must degrade to this
+            // gracefully rather than throwing or showing a misleading "0%".
+            assertTrue(summary.contains("Turns: 0"));
+            assertTrue(summary.contains("Credits used: 0.00"));
+            assertTrue(summary.contains("Context usage: not available yet"));
         }
     }
 

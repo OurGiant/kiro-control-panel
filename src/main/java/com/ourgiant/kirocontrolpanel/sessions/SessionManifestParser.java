@@ -78,6 +78,44 @@ public final class SessionManifestParser {
             root.path("session_created_reason").asText(""));
     }
 
+    /**
+     * Parses the credit/context-usage subset of {@code session_state}, confirmed against real
+     * seeded data (issue #120 follow-up): {@code rts_model_state} holds a current/latest
+     * {@code context_usage_percentage} snapshot and {@code model_info.context_window_tokens};
+     * {@code conversation_metadata.user_turn_metadatas[]} holds one entry per completed user
+     * turn, each with a {@code metering_usage} array of {@code {value, unit, unitPlural}}
+     * entries -- summed here, but only entries whose {@code unit} is exactly {@code "credit"}
+     * are counted, so a future differently-united entry is skipped (logged at debug) rather
+     * than silently added into a total it doesn't belong in.
+     */
+    public static SessionUsage parseUsage(Path jsonSidecar) throws IOException {
+        JsonNode root = MAPPER.readTree(jsonSidecar.toFile());
+        JsonNode rts = root.path("session_state").path("rts_model_state");
+        Double contextUsagePercentage = rts.hasNonNull("context_usage_percentage")
+            ? rts.get("context_usage_percentage").asDouble() : null;
+        JsonNode modelInfo = rts.path("model_info");
+        Integer contextWindowTokens = modelInfo.hasNonNull("context_window_tokens")
+            ? modelInfo.get("context_window_tokens").asInt() : null;
+        String modelId = modelInfo.hasNonNull("model_id") ? modelInfo.get("model_id").asText() : null;
+
+        JsonNode turns = root.path("session_state").path("conversation_metadata").path("user_turn_metadatas");
+        int turnCount = turns.isArray() ? turns.size() : 0;
+        double totalCredits = 0;
+        if (turns.isArray()) {
+            for (JsonNode turn : turns) {
+                for (JsonNode entry : turn.path("metering_usage")) {
+                    if ("credit".equals(entry.path("unit").asText(""))) {
+                        totalCredits += entry.path("value").asDouble(0);
+                    } else {
+                        logger.debug("Skipping metering_usage entry with unrecognized unit '{}' in {}",
+                            entry.path("unit").asText(""), jsonSidecar);
+                    }
+                }
+            }
+        }
+        return new SessionUsage(turnCount, totalCredits, contextUsagePercentage, contextWindowTokens, modelId);
+    }
+
     private static long parseInstant(String isoText) {
         if (isoText == null || isoText.isBlank()) {
             return 0L;
