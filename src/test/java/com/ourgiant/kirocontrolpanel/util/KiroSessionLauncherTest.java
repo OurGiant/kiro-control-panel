@@ -59,6 +59,62 @@ class KiroSessionLauncherTest {
     }
 
     @Test
+    void linuxCommandWithResumeSessionIdRunsChatResumeIdInsteadOfPlainKiroCli() {
+        List<String> command = KiroSessionLauncher.buildLinuxCommand("/home/me/project", "72897549-046d-4d9f-853c-df9896b9a4df");
+
+        assertEquals(List.of("gnome-terminal", "--working-directory=/home/me/project",
+            "--", "bash", "-c", "kiro-cli chat --resume-id '72897549-046d-4d9f-853c-df9896b9a4df'; exec bash"), command);
+    }
+
+    @Test
+    void linuxCommandWithNullResumeSessionIdIsIdenticalToTheDirectoryOnlyOverload() {
+        assertEquals(KiroSessionLauncher.buildLinuxCommand("/home/me/project"),
+            KiroSessionLauncher.buildLinuxCommand("/home/me/project", null));
+    }
+
+    @Test
+    void linuxCommandEscapesAnEmbeddedSingleQuoteInTheResumeSessionId() {
+        // Session IDs are kiro-cli-generated UUIDs in practice, but this proves the escaping
+        // itself is correct rather than relying on "UUIDs never need it" as the only safety net.
+        List<String> command = KiroSessionLauncher.buildLinuxCommand("/home/me/project", "it's-not-a-real-uuid");
+
+        assertEquals("kiro-cli chat --resume-id 'it'\\''s-not-a-real-uuid'; exec bash", command.get(5));
+    }
+
+    @Test
+    void windowsCommandWithResumeSessionIdRunsChatResumeIdInsteadOfPlainKiroCli() {
+        List<String> command = KiroSessionLauncher.buildWindowsCommand("C:\\plain", false, "72897549-046d-4d9f-853c-df9896b9a4df");
+
+        assertEquals(List.of("cmd.exe", "/c", "start", "Kiro Session", "pwsh.exe", "-NoExit",
+            "-Command", "Set-Location -LiteralPath 'C:\\plain'; kiro-cli chat --resume-id "
+                + "'72897549-046d-4d9f-853c-df9896b9a4df'"), command);
+    }
+
+    @Test
+    void windowsCommandWithNullResumeSessionIdIsIdenticalToTheThreeArgOverloadWithoutIt() {
+        assertEquals(KiroSessionLauncher.buildWindowsCommand("C:\\plain", true),
+            KiroSessionLauncher.buildWindowsCommand("C:\\plain", true, null));
+    }
+
+    @Test
+    void macCommandWithResumeSessionIdRunsChatResumeIdInsteadOfPlainKiroCli() {
+        List<String> command = KiroSessionLauncher.buildMacCommand("/Users/me/plain", "72897549-046d-4d9f-853c-df9896b9a4df");
+
+        assertEquals(List.of(
+            "osascript",
+            "-e", "tell application \"Terminal\" to activate",
+            "-e", "tell application \"Terminal\" to do script \"cd '/Users/me/plain' && "
+                + "kiro-cli chat --resume-id '72897549-046d-4d9f-853c-df9896b9a4df'\""
+        ), command);
+    }
+
+    @Test
+    void macCommandWithNullResumeSessionIdIsIdenticalToTheDirectoryOnlyOverload() {
+        assertEquals(KiroSessionLauncher.buildMacCommand("/Users/me/plain"),
+            KiroSessionLauncher.buildMacCommand("/Users/me/plain", null));
+    }
+
+    @Test
     @DisabledOnOs(OS.WINDOWS) // bash isn't reliably on PATH there; the function itself is POSIX-shell-only anyway
     void shellSingleQuoteEscapingRoundTripsThroughARealShell() throws Exception {
         // Strongest available verification for this specific layer: actually ask bash to
