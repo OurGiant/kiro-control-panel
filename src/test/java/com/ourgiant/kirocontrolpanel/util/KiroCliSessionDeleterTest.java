@@ -13,7 +13,28 @@ class KiroCliSessionDeleterTest {
     @Test
     void deleteNeverThrowsAndReturnsFalseWhenTheBinaryIsMissing() {
         boolean result = assertDoesNotThrow(() ->
-            KiroCliSessionDeleter.delete("kiro-cli-binary-that-does-not-exist-anywhere", "some-session-id"));
+            KiroCliSessionDeleter.delete("kiro-cli-binary-that-does-not-exist-anywhere",
+                "6f606f51-fff7-4c14-9b13-22d1571f5d8c"));
+
+        assertFalse(result);
+    }
+
+    /** sessionId can come from a session file's own JSON content (SessionManifest.sessionId(),
+     * #126's bulk clean-up), not just kiro-cli's own trusted ACP response -- reject anything that
+     * isn't a well-formed UUID before it ever reaches ProcessBuilder, rather than passing an
+     * arbitrary string through as a subprocess argument. See #136. */
+    @Test
+    void deleteRejectsAMalformedSessionIdWithoutSpawningAProcess() {
+        boolean result = assertDoesNotThrow(() ->
+            KiroCliSessionDeleter.delete("kiro-cli-binary-that-does-not-exist-anywhere", "--not-a-uuid"));
+
+        assertFalse(result);
+    }
+
+    @Test
+    void deleteRejectsANullSessionId() {
+        boolean result = assertDoesNotThrow(() ->
+            KiroCliSessionDeleter.delete("kiro-cli-binary-that-does-not-exist-anywhere", null));
 
         assertFalse(result);
     }

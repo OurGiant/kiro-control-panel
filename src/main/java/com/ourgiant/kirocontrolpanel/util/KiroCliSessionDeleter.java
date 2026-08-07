@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -17,6 +18,17 @@ import java.util.concurrent.TimeUnit;
  * Best-effort by design: never throws, only logs and returns {@code false} on failure, since
  * every caller treats deletion as cleanup where "try again later" is an acceptable outcome, not
  * a critical path that should turn into a bigger failure of its own.
+ * <p>
+ * {@code sessionId} is always required to be a well-formed UUID before it's passed to
+ * {@link ProcessBuilder}. kiro-cli's ACP {@code session/new} response is inherently trusted (this
+ * app just spawned the process and read its own stdout), but #126's bulk clean-up instead sources
+ * it from {@code SessionManifest.sessionId()} -- free-form JSON text read back out of a session
+ * file under {@code ~/.kiro/sessions/cli/} (see {@code SessionManifestParser.parseSidecar}), not
+ * something kiro-cli handed this app directly. {@link ProcessBuilder}'s array form never invokes a
+ * shell, so shell metacharacters in that text can't do anything -- but an unvalidated value could
+ * still be read by kiro-cli's own argument parser as a flag rather than a session id (e.g. a value
+ * starting with {@code -}). Validating against the one shape kiro-cli itself ever generates closes
+ * that off entirely, rather than trying to enumerate unsafe characters. See #136.
  */
 public final class KiroCliSessionDeleter {
     private static final Logger logger = LoggerFactory.getLogger(KiroCliSessionDeleter.class);
@@ -31,6 +43,10 @@ public final class KiroCliSessionDeleter {
 
     /** Package-private seam for tests: lets a nonexistent binary name exercise the failure path. */
     static boolean delete(String binary, String sessionId) {
+        if (!isWellFormedSessionId(sessionId)) {
+            logger.warn("Refusing to delete kiro-cli session with a malformed id: {}", sessionId);
+            return false;
+        }
         try {
             Process process = new ProcessBuilder(binary, "chat", "--delete-session", sessionId)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
@@ -51,6 +67,18 @@ public final class KiroCliSessionDeleter {
             return false;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    private static boolean isWellFormedSessionId(String sessionId) {
+        if (sessionId == null) {
+            return false;
+        }
+        try {
+            UUID.fromString(sessionId);
+            return true;
+        } catch (IllegalArgumentException e) {
             return false;
         }
     }
