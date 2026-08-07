@@ -58,8 +58,23 @@ public final class KiroSessionLauncher {
 
     /** No shell involved on Linux -- ProcessBuilder passes argv directly, so the directory needs no escaping. */
     public static List<String> buildLinuxCommand(String directory) {
+        return buildLinuxCommand(directory, null);
+    }
+
+    /**
+     * @param resumeSessionId if non-null, resumes that specific kiro-cli session
+     *                        ({@code chat --resume-id <id>}, confirmed real via {@code kiro-cli
+     *                        chat --help} -- issue #121) instead of starting a fresh one.
+     *                        Unlike {@code directory}, this value is embedded in the {@code bash
+     *                        -c} script string below, not passed as its own argv element, so it
+     *                        gets the same POSIX single-quote escaping treatment.
+     */
+    public static List<String> buildLinuxCommand(String directory, String resumeSessionId) {
+        String kiroInvocation = resumeSessionId == null
+            ? "kiro-cli"
+            : "kiro-cli chat --resume-id '" + escapeShellSingleQuoted(resumeSessionId) + "'";
         return List.of(GNOME_TERMINAL_BINARY, "--working-directory=" + directory,
-            "--", "bash", "-c", "kiro-cli; exec bash");
+            "--", "bash", "-c", kiroInvocation + "; exec bash");
     }
 
     /**
@@ -82,15 +97,26 @@ public final class KiroSessionLauncher {
      *                    (see AppPreferences#isSkipPowerShellProfile) for launch speed;
      *                    users whose profile sets up PATH/env vars kiro-cli depends on
      *                    can uncheck it -- see #42.
+     * @param resumeSessionId if non-null, resumes that specific kiro-cli session instead of
+     *                    starting a fresh one -- see #121. Embedded in the same PowerShell
+     *                    single-quoted script string as {@code directory}, so it gets the same
+     *                    escaping.
      * @throws IllegalArgumentException if {@code directory} contains a character cmd.exe
      *                    treats specially
      */
     public static List<String> buildWindowsCommand(String directory, boolean skipProfile) {
+        return buildWindowsCommand(directory, skipProfile, null);
+    }
+
+    public static List<String> buildWindowsCommand(String directory, boolean skipProfile, String resumeSessionId) {
         if (WINDOWS_UNSAFE_DIRECTORY_CHARACTERS.matcher(directory).find()) {
             throw new IllegalArgumentException(
                 "Folder path contains a character cmd.exe treats specially (one of & | ^ % < > \"): " + directory);
         }
-        String script = "Set-Location -LiteralPath '" + escapePowerShellSingleQuoted(directory) + "'; kiro-cli";
+        String kiroInvocation = resumeSessionId == null
+            ? "kiro-cli"
+            : "kiro-cli chat --resume-id '" + escapePowerShellSingleQuoted(resumeSessionId) + "'";
+        String script = "Set-Location -LiteralPath '" + escapePowerShellSingleQuoted(directory) + "'; " + kiroInvocation;
         List<String> command = new ArrayList<>(List.of("cmd.exe", "/c", "start", "Kiro Session",
             PWSH_BINARY, "-NoExit"));
         if (skipProfile) {
@@ -103,7 +129,17 @@ public final class KiroSessionLauncher {
 
     /** Two independent escaping layers: POSIX shell quoting, then AppleScript string-literal quoting of the result. */
     public static List<String> buildMacCommand(String directory) {
-        String shellCommand = "cd '" + escapeShellSingleQuoted(directory) + "' && kiro-cli";
+        return buildMacCommand(directory, null);
+    }
+
+    /** @param resumeSessionId if non-null, resumes that specific kiro-cli session instead of
+     *                    starting a fresh one -- see #121. Embedded in the same shell command
+     *                    string as {@code directory}, so it goes through both escaping layers too. */
+    public static List<String> buildMacCommand(String directory, String resumeSessionId) {
+        String kiroInvocation = resumeSessionId == null
+            ? "kiro-cli"
+            : "kiro-cli chat --resume-id '" + escapeShellSingleQuoted(resumeSessionId) + "'";
+        String shellCommand = "cd '" + escapeShellSingleQuoted(directory) + "' && " + kiroInvocation;
         String appleScriptLiteral = escapeAppleScriptDoubleQuoted(shellCommand);
         return List.of("osascript",
             "-e", "tell application \"Terminal\" to activate",
@@ -140,6 +176,16 @@ public final class KiroSessionLauncher {
     }
 
     public static void launchSession(Component parent, Path workingDirectory, boolean skipWindowsProfile) {
+        launchSession(parent, workingDirectory, skipWindowsProfile, null);
+    }
+
+    /** @param resumeSessionId if non-null, resumes that specific kiro-cli session (in
+     *                    {@code workingDirectory}, which must be the session's own recorded
+     *                    cwd -- confirmed via {@code kiro-cli chat --list-sessions} that saved
+     *                    sessions are scoped to the directory they were created in) instead of
+     *                    starting a fresh one -- see #121. */
+    public static void launchSession(Component parent, Path workingDirectory, boolean skipWindowsProfile,
+            String resumeSessionId) {
         if (workingDirectory == null || !Files.isDirectory(workingDirectory)) {
             JOptionPane.showMessageDialog(parent,
                 "That location doesn't exist yet:\n" + workingDirectory, "Not Found", JOptionPane.WARNING_MESSAGE);
@@ -148,16 +194,16 @@ public final class KiroSessionLauncher {
 
         String directory = workingDirectory.toString();
         switch (detect(System.getProperty("os.name"))) {
-            case LINUX -> launchLinux(parent, directory);
-            case WINDOWS -> launchWindows(parent, directory, skipWindowsProfile);
-            case MACOS -> launchMac(parent, directory);
+            case LINUX -> launchLinux(parent, directory, resumeSessionId);
+            case WINDOWS -> launchWindows(parent, directory, skipWindowsProfile, resumeSessionId);
+            case MACOS -> launchMac(parent, directory, resumeSessionId);
             case UNSUPPORTED -> JOptionPane.showMessageDialog(parent,
                 "Launching a terminal isn't supported on this platform.",
                 "Not Supported", JOptionPane.INFORMATION_MESSAGE);
         }
     }
 
-    private static void launchLinux(Component parent, String directory) {
+    private static void launchLinux(Component parent, String directory, String resumeSessionId) {
         if (findOnPath(System.getenv("PATH"), GNOME_TERMINAL_BINARY, File::canExecute) == null) {
             JOptionPane.showMessageDialog(parent,
                 "GNOME Terminal (gnome-terminal) was not found on your PATH.\n"
@@ -168,10 +214,10 @@ public final class KiroSessionLauncher {
         // Fire-and-forget, never waitFor(): Ubuntu's gnome-terminal wrapper script blocks until
         // the terminal window itself closes (confirmed by reading /usr/bin/gnome-terminal), so
         // waiting here would hang for the whole session's lifetime, not just the launch.
-        startFireAndForget(parent, buildLinuxCommand(directory));
+        startFireAndForget(parent, buildLinuxCommand(directory, resumeSessionId));
     }
 
-    private static void launchWindows(Component parent, String directory, boolean skipProfile) {
+    private static void launchWindows(Component parent, String directory, boolean skipProfile, String resumeSessionId) {
         if (findOnPath(System.getenv("PATH"), PWSH_BINARY, File::canExecute) == null) {
             JOptionPane.showMessageDialog(parent,
                 "PowerShell 7 (pwsh) was not found on your PATH.\n"
@@ -182,7 +228,7 @@ public final class KiroSessionLauncher {
         }
         List<String> command;
         try {
-            command = buildWindowsCommand(directory, skipProfile);
+            command = buildWindowsCommand(directory, skipProfile, resumeSessionId);
         } catch (IllegalArgumentException e) {
             JOptionPane.showMessageDialog(parent,
                 "This folder's name contains a character that can't be safely passed through "
@@ -204,8 +250,8 @@ public final class KiroSessionLauncher {
         }
     }
 
-    private static void launchMac(Component parent, String directory) {
-        List<String> command = buildMacCommand(directory);
+    private static void launchMac(Component parent, String directory, String resumeSessionId) {
+        List<String> command = buildMacCommand(directory, resumeSessionId);
         try {
             Process process = new ProcessBuilder(command).start();
             // osascript is a short-lived Apple-Event dispatcher (not the terminal session itself),

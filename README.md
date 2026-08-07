@@ -77,8 +77,12 @@ context-window usage — touched files with "Reveal File", "View
 Transcript..." for a readable, role-labeled rendering of the session's
 actual prompts and replies (with its own in-dialog search bar to highlight
 and jump between matches within that transcript; double-clicking a session
-row is a shortcut to the same view), and "View Raw JSON..." for the
-session's own sidecar file). The filter field above the table narrows
+row is a shortcut to the same view), "View Raw JSON..." for the session's
+own sidecar file, and "Resume in kiro-cli..." to reopen that exact
+conversation (`kiro-cli chat --resume-id <id>`) in a brand-new terminal
+window, launched in the session's own recorded working directory — reuses
+the same cross-platform terminal-launching code as this app's existing
+"Launch kiro-cli here" actions elsewhere). The filter field above the table narrows
 results in-memory as you type, same as every other panel; pressing Enter
 instead runs a full-text search over the indexed message content (never
 tool-call/result payloads) and shows ranked, snippet-highlighted matches.

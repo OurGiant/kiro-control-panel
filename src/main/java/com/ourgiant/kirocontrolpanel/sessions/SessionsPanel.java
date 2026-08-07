@@ -3,6 +3,7 @@ package com.ourgiant.kirocontrolpanel.sessions;
 import com.ourgiant.kirocontrolpanel.AppPreferences;
 import com.ourgiant.kirocontrolpanel.util.DesktopUtils;
 import com.ourgiant.kirocontrolpanel.util.InAppFileEditorLauncher;
+import com.ourgiant.kirocontrolpanel.util.KiroSessionLauncher;
 import com.ourgiant.kirocontrolpanel.util.SwingLayoutUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +57,7 @@ public class SessionsPanel extends JPanel {
     private static final DateTimeFormatter SUMMARY_TIMESTAMP_FORMAT =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
 
+    private final AppPreferences preferences;
     private final SessionIndexService indexService;
 
     private final JTextField filterField = SwingLayoutUtils.createFilterField(this::onFilterChanged);
@@ -68,6 +70,7 @@ public class SessionsPanel extends JPanel {
     private final JList<String> filesList = new JList<>(filesListModel);
     private final JButton viewTranscriptButton = new JButton("View Transcript...");
     private final JButton viewRawJsonButton = new JButton("View Raw JSON...");
+    private final JButton resumeInKiroCliButton = new JButton("Resume in kiro-cli...");
     private final JButton revealFileButton = new JButton("Reveal File");
     private final JButton revealSessionButton = new JButton("Reveal Session Files");
 
@@ -81,6 +84,7 @@ public class SessionsPanel extends JPanel {
 
     public SessionsPanel(AppPreferences preferences, SessionIndexService indexService) {
         super(new BorderLayout(8, 8));
+        this.preferences = preferences;
         this.indexService = indexService;
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
@@ -147,10 +151,11 @@ public class SessionsPanel extends JPanel {
 
         viewTranscriptButton.addActionListener(e -> onViewTranscript());
         viewRawJsonButton.addActionListener(e -> onViewRawJson());
+        resumeInKiroCliButton.addActionListener(e -> onResumeInKiroCli());
         revealFileButton.addActionListener(e -> onRevealFile());
         revealSessionButton.addActionListener(e -> onRevealSession());
         panel.add(SwingLayoutUtils.createVerticalButtonPanel(
-                viewTranscriptButton, viewRawJsonButton, revealFileButton, revealSessionButton),
+                viewTranscriptButton, viewRawJsonButton, resumeInKiroCliButton, revealFileButton, revealSessionButton),
             BorderLayout.EAST);
 
         return panel;
@@ -250,6 +255,7 @@ public class SessionsPanel extends JPanel {
             summaryArea.setText("");
             viewTranscriptButton.setEnabled(false);
             viewRawJsonButton.setEnabled(false);
+            resumeInKiroCliButton.setEnabled(false);
             revealFileButton.setEnabled(false);
             revealSessionButton.setEnabled(false);
             return;
@@ -262,6 +268,7 @@ public class SessionsPanel extends JPanel {
         }
         viewTranscriptButton.setEnabled(true);
         viewRawJsonButton.setEnabled(true);
+        resumeInKiroCliButton.setEnabled(true);
         revealFileButton.setEnabled(false);
         revealSessionButton.setEnabled(true);
     }
@@ -325,6 +332,19 @@ public class SessionsPanel extends JPanel {
             .setVisible(true);
     }
 
+    /** Launches kiro-cli in the session's own recorded cwd, resuming that exact conversation
+     * (confirmed via {@code kiro-cli chat --list-sessions} that saved sessions are scoped to the
+     * directory they were created in -- see #121). Reuses {@link KiroSessionLauncher}, the same
+     * cross-platform terminal-launching code the existing "Launch kiro-cli here" actions use
+     * elsewhere in this app. */
+    private void onResumeInKiroCli() {
+        if (selectedManifest == null) {
+            return;
+        }
+        KiroSessionLauncher.launchSession(this, Paths.get(selectedManifest.cwd()),
+            preferences.isSkipPowerShellProfile(), selectedManifest.sessionId());
+    }
+
     private void onRevealFile() {
         String selected = filesList.getSelectedValue();
         if (selected != null) {
@@ -367,6 +387,11 @@ public class SessionsPanel extends JPanel {
     /** Package-private, for tests. */
     JButton getViewRawJsonButton() {
         return viewRawJsonButton;
+    }
+
+    /** Package-private, for tests. */
+    JButton getResumeInKiroCliButton() {
+        return resumeInKiroCliButton;
     }
 
     /** Package-private, for tests. */
