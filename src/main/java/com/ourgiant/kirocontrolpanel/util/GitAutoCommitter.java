@@ -35,6 +35,7 @@ public final class GitAutoCommitter {
     private static final String GIT_BINARY = KiroSessionLauncher.detect(System.getProperty("os.name"))
         == KiroSessionLauncher.Platform.WINDOWS ? "git.exe" : "git";
     private static final long GIT_TIMEOUT_SECONDS = 10;
+    private static final AppPreferences preferences = new AppPreferences();
     private static final String GITIGNORE_CONTENT = """
         # Kiro-managed, not something Kiro Control Panel edits -- ephemeral/large session state.
         extensions/
@@ -83,7 +84,7 @@ public final class GitAutoCommitter {
 
     /** Best-effort: never throws, and a git failure here never blocks the caller's own save. */
     public static void commitIfEnabled(Path filePath) {
-        if (!new AppPreferences().isGitTrackingEnabled()) {
+        if (!preferences.isGitTrackingEnabled()) {
             return;
         }
         commit(KiroPaths.globalKiroHome(), filePath);
