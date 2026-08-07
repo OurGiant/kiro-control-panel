@@ -89,14 +89,17 @@ class SessionsPanelTest {
             SessionsPanel panel = new SessionsPanel(new AppPreferences(), indexService);
             assertFalse(panel.getViewTranscriptButton().isEnabled());
             assertFalse(panel.getViewRawJsonButton().isEnabled());
+            assertFalse(panel.getResumeInKiroCliButton().isEnabled());
 
             panel.getTable().setRowSelectionInterval(0, 0);
             assertTrue(panel.getViewTranscriptButton().isEnabled());
             assertTrue(panel.getViewRawJsonButton().isEnabled());
+            assertTrue(panel.getResumeInKiroCliButton().isEnabled());
 
             panel.getTable().clearSelection();
             assertFalse(panel.getViewTranscriptButton().isEnabled());
             assertFalse(panel.getViewRawJsonButton().isEnabled());
+            assertFalse(panel.getResumeInKiroCliButton().isEnabled());
         }
     }
 
