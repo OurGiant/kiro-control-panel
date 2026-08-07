@@ -20,6 +20,8 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import java.awt.BorderLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -100,6 +102,16 @@ public class SessionsPanel extends JPanel {
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 updateDetailPane();
+            }
+        });
+        // JTable selects the clicked row on mousePressed, synchronously ahead of this
+        // mouseClicked dispatch on the same EDT, so selectedManifest is already current here.
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && table.getSelectedRow() >= 0) {
+                    onViewTranscript();
+                }
             }
         });
 
@@ -243,7 +255,8 @@ public class SessionsPanel extends JPanel {
             return;
         }
 
-        summaryArea.setText(summaryText(selectedManifest) + "\n\n" + statsText(selectedManifest));
+        summaryArea.setText(summaryText(selectedManifest) + "\n\n" + statsText(selectedManifest)
+            + "\n" + usageText(selectedManifest));
         for (String file : selectedManifest.filesTouched()) {
             filesListModel.addElement(file);
         }
@@ -273,6 +286,26 @@ public class SessionsPanel extends JPanel {
         } catch (IOException e) {
             logger.warn("Failed to compute session stats for {}", manifest.sessionId(), e);
             return "Stats unavailable: " + e.getMessage();
+        }
+    }
+
+    /** Credit/context-window usage, parsed on demand from the {@code <uuid>.json} sidecar --
+     * see {@link SessionManifestParser#parseUsage}. */
+    private String usageText(SessionManifest manifest) {
+        try {
+            SessionUsage usage = SessionManifestParser.parseUsage(manifest.sourceJson());
+            String contextLine = usage.contextUsagePercentage() != null
+                ? "Context usage: " + String.format(Locale.ROOT, "%.1f%%", usage.contextUsagePercentage())
+                    + (usage.contextWindowTokens() != null
+                        ? " of " + String.format(Locale.ROOT, "%,d", usage.contextWindowTokens()) + " tokens" : "")
+                    + (usage.modelId() != null ? " (" + usage.modelId() + ")" : "")
+                : "Context usage: not available yet (no completed turn)";
+            return "Turns: " + usage.turnCount() + "\n"
+                + "Credits used: " + String.format(Locale.ROOT, "%.2f", usage.totalCredits()) + "\n"
+                + contextLine;
+        } catch (IOException e) {
+            logger.warn("Failed to compute session usage for {}", manifest.sessionId(), e);
+            return "Usage unavailable: " + e.getMessage();
         }
     }
 

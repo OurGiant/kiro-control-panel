@@ -150,6 +150,98 @@ class SessionManifestParserTest {
     }
 
     @Test
+    void parseUsageSumsCreditEntriesAcrossAllTurnsAndSkipsUnrecognizedUnits() throws IOException {
+        Path sidecar = tempDir.resolve("session.json");
+        Files.writeString(sidecar, """
+            {
+              "session_id": "abc",
+              "cwd": "/tmp",
+              "created_at": "2026-08-07T11:26:45.323381992Z",
+              "updated_at": "2026-08-07T11:29:38.111897334Z",
+              "title": null,
+              "session_created_reason": "interactive",
+              "session_state": {
+                "rts_model_state": {
+                  "context_usage_percentage": 12.5,
+                  "model_info": {"model_id": "auto", "context_window_tokens": 200000}
+                },
+                "conversation_metadata": {
+                  "user_turn_metadatas": [
+                    {"metering_usage": [
+                      {"value": 0.1, "unit": "credit", "unitPlural": "credits"},
+                      {"value": 0.2, "unit": "credit", "unitPlural": "credits"}
+                    ]},
+                    {"metering_usage": [
+                      {"value": 0.3, "unit": "credit", "unitPlural": "credits"},
+                      {"value": 99.0, "unit": "future-unrecognized-unit", "unitPlural": "somethings"}
+                    ]}
+                  ]
+                }
+              }
+            }
+            """);
+
+        SessionUsage usage = SessionManifestParser.parseUsage(sidecar);
+
+        assertEquals(2, usage.turnCount());
+        assertEquals(0.6, usage.totalCredits(), 0.0001);
+        assertEquals(12.5, usage.contextUsagePercentage());
+        assertEquals(200000, usage.contextWindowTokens());
+        assertEquals("auto", usage.modelId());
+    }
+
+    @Test
+    void parseUsageOfASessionWithNoCompletedTurnsHasNullContextFieldsRatherThanZero() throws IOException {
+        Path sidecar = tempDir.resolve("session.json");
+        Files.writeString(sidecar, """
+            {
+              "session_id": "abc",
+              "cwd": "/tmp",
+              "created_at": "2026-08-07T11:26:45.323381992Z",
+              "updated_at": "2026-08-07T11:29:38.111897334Z",
+              "title": null,
+              "session_created_reason": "interactive",
+              "session_state": {
+                "rts_model_state": {
+                  "context_usage_percentage": null,
+                  "model_info": {"model_id": "auto", "context_window_tokens": 200000}
+                },
+                "conversation_metadata": {"user_turn_metadatas": []}
+              }
+            }
+            """);
+
+        SessionUsage usage = SessionManifestParser.parseUsage(sidecar);
+
+        assertEquals(0, usage.turnCount());
+        assertEquals(0.0, usage.totalCredits(), 0.0001);
+        assertNull(usage.contextUsagePercentage());
+    }
+
+    @Test
+    void parseUsageOfASidecarMissingSessionStateEntirelyDegradesGracefullyToAllZeroesAndNulls() throws IOException {
+        Path sidecar = tempDir.resolve("session.json");
+        Files.writeString(sidecar, """
+            {
+              "session_id": "abc",
+              "cwd": "/tmp",
+              "created_at": "2026-08-07T11:26:45.323381992Z",
+              "updated_at": "2026-08-07T11:29:38.111897334Z",
+              "title": null,
+              "session_created_reason": "interactive"
+            }
+            """);
+
+        SessionUsage usage = SessionManifestParser.parseUsage(sidecar);
+
+        assertEquals(0, usage.turnCount());
+        assertEquals(0.0, usage.totalCredits(), 0.0001);
+        assertNull(usage.contextUsagePercentage());
+        assertNull(usage.contextWindowTokens());
+        assertNull(usage.modelId());
+    }
+
+    @Test
     void parseSidecarToleratesUnknownFieldsLikeSessionState() throws IOException {
         Path file = tempDir.resolve("session.json");
         Files.writeString(file, """

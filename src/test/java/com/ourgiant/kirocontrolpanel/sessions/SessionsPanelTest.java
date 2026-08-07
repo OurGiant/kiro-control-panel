@@ -114,6 +114,11 @@ class SessionsPanelTest {
             assertTrue(summary.contains("Duration:"));
             assertTrue(summary.contains("Words exchanged:"));
             assertTrue(summary.contains("Longest reply:"));
+            // Fixture sidecars have no session_state -- parseUsage must degrade to this
+            // gracefully rather than throwing or showing a misleading "0%".
+            assertTrue(summary.contains("Turns: 0"));
+            assertTrue(summary.contains("Credits used: 0.00"));
+            assertTrue(summary.contains("Context usage: not available yet"));
         }
     }
 
