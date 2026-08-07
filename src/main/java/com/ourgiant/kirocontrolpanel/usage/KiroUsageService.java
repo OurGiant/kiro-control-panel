@@ -99,6 +99,13 @@ public final class KiroUsageService {
             throw new UsageFetchException(binary + " isn't on your PATH", e);
         }
 
+        // ACP's session/new has no "ephemeral" concept -- every call persists a real session to
+        // ~/.kiro/sessions/cli/, even though this is purely a vehicle for one usage query and no
+        // prompt is ever sent through it. Left alone, one of these accumulates on every single
+        // usage check (every Control Panel window open -- see UsagePanel's construction-time
+        // refresh), which is exactly what turned up as a wall of "(no prompt)" sessions in the
+        // Sessions tab (issue #124). Clean it up in `finally` so a fetch failure can't orphan it.
+        String sessionId = null;
         try (AcpClient client = new AcpClient(process)) {
             client.call("initialize", Map.of(
                 "protocolVersion", 1,
@@ -108,7 +115,7 @@ public final class KiroUsageService {
             JsonNode sessionResult = client.call("session/new", Map.of(
                 "cwd", System.getProperty("user.dir"),
                 "mcpServers", List.of()));
-            String sessionId = sessionResult.path("sessionId").asText(null);
+            sessionId = sessionResult.path("sessionId").asText(null);
             if (sessionId == null) {
                 throw new UsageFetchException("kiro-cli didn't return a session id");
             }
@@ -123,6 +130,35 @@ public final class KiroUsageService {
             return parseSnapshot(data);
         } catch (IOException e) {
             throw new UsageFetchException("Couldn't talk to kiro-cli: " + e.getMessage(), e);
+        } finally {
+            if (sessionId != null) {
+                deleteThrowawaySession(binary, sessionId);
+            }
+        }
+    }
+
+    /** Best-effort cleanup of the throwaway session {@code session/new} persisted -- confirmed real
+     * via {@code kiro-cli chat --help}: {@code --delete-session <SESSION_ID>} deletes a saved chat
+     * session by ID, verified by hand against a real leftover session before wiring this in. Never
+     * throws: a failure here shouldn't turn a successful (or already-failed) usage fetch into an
+     * error, it just means one more session lingers until the next manual cleanup. */
+    static void deleteThrowawaySession(String binary, String sessionId) {
+        try {
+            Process process = new ProcessBuilder(binary, "chat", "--delete-session", sessionId)
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .start();
+            if (!process.waitFor(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                logger.warn("Timed out deleting throwaway usage-check session {}", sessionId);
+            } else if (process.exitValue() != 0) {
+                logger.warn("kiro-cli exited {} deleting throwaway usage-check session {}",
+                    process.exitValue(), sessionId);
+            }
+        } catch (IOException e) {
+            logger.warn("Failed to delete throwaway usage-check session {}", sessionId, e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
