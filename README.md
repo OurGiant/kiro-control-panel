@@ -40,7 +40,10 @@ that name.
   with a Form or Raw JSON editor for each server; a "Browse Catalog..."
   picker for one-click adding known servers from
   [kiro.dev's known MCP server list](https://kiro.dev/docs/mcp/servers/),
-  with a "Refresh" button that pulls the current list live from GitHub
+  with a "Refresh" button that pulls the current list live from GitHub;
+  for enterprise/IDC-managed accounts, a background check warns when the
+  org's MCP registry is unreachable, since kiro-cli silently disables
+  every MCP server (regardless of local config) in that state
 - **Steering Docs**: create/edit/delete `.kiro/steering/*.md`, including
   front-matter inclusion modes (always/fileMatch/manual/auto), with
   scaffolded starter content for `product.md`/`tech.md`/`structure.md`
