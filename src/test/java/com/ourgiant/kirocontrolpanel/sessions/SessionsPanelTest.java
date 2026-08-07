@@ -44,6 +44,24 @@ class SessionsPanelTest {
         return service;
     }
 
+    /**
+     * Regression test for a usability finding from UAT on issue #117: the filter field's
+     * dual live-filter/Enter-to-search behavior had no visual cue, so a user typing a keyword
+     * read the live-filtered (cwd/title only) results as "search doesn't reach the full
+     * conversation" when pressing Enter would have found it. Confirms the explanatory
+     * placeholder text and tooltip are actually wired up, not just present in a comment.
+     */
+    @Test
+    void filterFieldExplainsItsDualLiveFilterAndSearchBehavior() throws Exception {
+        try (SessionIndexService indexService = indexServiceWithTwoSessions()) {
+            SessionsPanel panel = new SessionsPanel(new AppPreferences(), indexService);
+
+            Object placeholder = panel.getFilterField().getClientProperty("JTextField.placeholderText");
+            assertTrue(placeholder instanceof String text && text.contains("Enter") && text.contains("search"));
+            assertTrue(panel.getFilterField().getToolTipText().contains("full-text search"));
+        }
+    }
+
     @Test
     void loadsAllIndexedSessionsOnConstruction() throws Exception {
         try (SessionIndexService indexService = indexServiceWithTwoSessions()) {

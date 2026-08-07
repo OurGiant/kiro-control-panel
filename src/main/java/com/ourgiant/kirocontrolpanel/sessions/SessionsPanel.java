@@ -80,6 +80,17 @@ public class SessionsPanel extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
 
         filterField.addActionListener(e -> onSearch());
+        // The filter field does double duty (live filter as you type vs. Enter-triggered FTS
+        // search) with no other visual cue which mode applies -- UAT on issue #117 found a user
+        // typing a keyword and reading the live-filtered (cwd/title only) results as "search
+        // doesn't reach the full conversation," when the real transcript search just needed
+        // Enter. FlatLaf's placeholder text (visible until the field has content) plus a
+        // tooltip (visible any time, including mid-query) both explain the distinction.
+        filterField.putClientProperty("JTextField.placeholderText",
+            "Filter by cwd/title, or press Enter to search transcripts");
+        filterField.setToolTipText(
+            "Type to filter the table below by cwd/title. Press Enter to run a full-text search "
+                + "over the whole conversation (every prompt and assistant reply).");
 
         table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.setAutoCreateRowSorter(false);
