@@ -20,9 +20,11 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import java.awt.BorderLayout;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -241,7 +243,7 @@ public class SessionsPanel extends JPanel {
             return;
         }
 
-        summaryArea.setText(summaryText(selectedManifest));
+        summaryArea.setText(summaryText(selectedManifest) + "\n\n" + statsText(selectedManifest));
         for (String file : selectedManifest.filesTouched()) {
             filesListModel.addElement(file);
         }
@@ -257,8 +259,21 @@ public class SessionsPanel extends JPanel {
             + "Started: " + SUMMARY_TIMESTAMP_FORMAT.format(manifest.createdAt()) + "\n"
             + "Last activity: " + SUMMARY_TIMESTAMP_FORMAT.format(manifest.updatedAt()) + "\n"
             + "Started via: " + manifest.sessionCreatedReason() + "\n"
-            + "Messages: " + manifest.messageCount() + "\n"
             + "Prompt: " + (manifest.title() != null ? manifest.title() : "(none)");
+    }
+
+    /** Computed on demand from the parsed transcript rather than stored in the index --
+     * see {@link SessionStats}. */
+    private String statsText(SessionManifest manifest) {
+        try {
+            List<TranscriptMessage> messages =
+                SessionManifestParser.parseTranscript(manifest.sourceJsonl(), 0).messages();
+            Duration duration = Duration.between(manifest.createdAt(), manifest.updatedAt());
+            return SessionStats.format(SessionStats.summarize(messages, duration));
+        } catch (IOException e) {
+            logger.warn("Failed to compute session stats for {}", manifest.sessionId(), e);
+            return "Stats unavailable: " + e.getMessage();
+        }
     }
 
     private void onViewTranscript() {
@@ -294,6 +309,11 @@ public class SessionsPanel extends JPanel {
     /** Package-private, for tests. */
     JTextField getFilterField() {
         return filterField;
+    }
+
+    /** Package-private, for tests. */
+    JTextArea getSummaryArea() {
+        return summaryArea;
     }
 
     /** Package-private, for tests. */

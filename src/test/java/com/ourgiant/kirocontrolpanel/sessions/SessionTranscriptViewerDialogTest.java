@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SessionTranscriptViewerDialogTest {
 
@@ -38,5 +39,33 @@ class SessionTranscriptViewerDialogTest {
         String formatted = SessionTranscriptViewerDialog.formatTranscript(messages);
 
         assertEquals("system:\nsome future role", formatted);
+    }
+
+    @Test
+    void findMatchesIsCaseInsensitiveAndReturnsOffsetsInEncounterOrder() {
+        List<Integer> matches = SessionTranscriptViewerDialog.findMatches(
+            "Refactor the auth module, then refactor the tests too", "refactor");
+
+        assertEquals(List.of(0, 31), matches);
+    }
+
+    @Test
+    void findMatchesDoesNotOverlapAConsumedMatch() {
+        // "aaa" against needle "aa" -- a naive overlapping search would find offsets 0 and 1;
+        // this should consume each match's full length before looking for the next one.
+        List<Integer> matches = SessionTranscriptViewerDialog.findMatches("aaa", "aa");
+
+        assertEquals(List.of(0), matches);
+    }
+
+    @Test
+    void findMatchesOfAnEmptyOrBlankNeedleFindsNothingRatherThanEveryPosition() {
+        assertTrue(SessionTranscriptViewerDialog.findMatches("some text", "").isEmpty());
+        assertTrue(SessionTranscriptViewerDialog.findMatches("some text", null).isEmpty());
+    }
+
+    @Test
+    void findMatchesOfATermNotPresentIsEmpty() {
+        assertTrue(SessionTranscriptViewerDialog.findMatches("some text", "xyz").isEmpty());
     }
 }

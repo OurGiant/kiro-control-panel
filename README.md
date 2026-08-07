@@ -70,11 +70,13 @@ a local SQLite/FTS5 database (never written under `~/.kiro` itself, so it
 never trips the external-change monitor or gets swept into snapshots) and
 shows them as a sortable table — date, working directory, opening prompt,
 files touched — with a detail pane for the selected session (manifest
-fields, touched files with "Reveal File", "View Transcript..." for a
-readable, role-labeled rendering of the session's actual prompts and
-replies, and "View Raw JSON..." for the session's own sidecar file). The
-filter field above the table narrows
-results in-memory as you type, same as every other panel; pressing Enter
+fields plus computed stats — message counts by role, session duration,
+total words exchanged, longest reply — touched files with "Reveal File",
+"View Transcript..." for a readable, role-labeled rendering of the
+session's actual prompts and replies (with its own in-dialog search bar to
+highlight and jump between matches within that transcript), and "View Raw
+JSON..." for the session's own sidecar file). The filter field above the
+table narrows results in-memory as you type, same as every other panel; pressing Enter
 instead runs a full-text search over the indexed message content (never
 tool-call/result payloads) and shows ranked, snippet-highlighted matches.
 Indexing runs in the background — an initial catch-up scan on launch, then

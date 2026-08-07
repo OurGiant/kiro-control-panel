@@ -101,6 +101,23 @@ class SessionsPanelTest {
     }
 
     @Test
+    void selectingARowShowsComputedStatsAlongsideTheManifestSummary() throws Exception {
+        try (SessionIndexService indexService = indexServiceWithTwoSessions()) {
+            SessionsPanel panel = new SessionsPanel(new AppPreferences(), indexService);
+
+            panel.getTable().setRowSelectionInterval(0, 0);
+
+            // Each fixture session has exactly one Prompt line and no AssistantMessage --
+            // see indexServiceWithTwoSessions -- so the stats block should reflect that.
+            String summary = panel.getSummaryArea().getText();
+            assertTrue(summary.contains("Messages: 1 (1 you / 0 Kiro)"));
+            assertTrue(summary.contains("Duration:"));
+            assertTrue(summary.contains("Words exchanged:"));
+            assertTrue(summary.contains("Longest reply:"));
+        }
+    }
+
+    @Test
     void revealFileButtonIsDisabledUntilAFileIsSelectedInTheDetailList() throws Exception {
         try (SessionIndexService indexService = indexServiceWithTwoSessions()) {
             SessionsPanel panel = new SessionsPanel(new AppPreferences(), indexService);
