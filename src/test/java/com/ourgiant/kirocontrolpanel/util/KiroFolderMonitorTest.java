@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import javax.swing.SwingUtilities;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -36,6 +38,25 @@ class KiroFolderMonitorTest {
         // using native OS events, with much coarser latency than Linux's inotify-backed
         // one -- this isn't testing how fast the notification arrives, just that it does.
         assertTrue(latch.await(20, TimeUnit.SECONDS), "callback should fire after a file changes");
+    }
+
+    @Test
+    @Timeout(30)
+    void callbackDoesNotRunOnTheEventDispatchThread() throws IOException, InterruptedException {
+        // Consumers (ChangeLogWatcherManager, SessionsWatcher) do blocking file/DB I/O in this
+        // callback -- it must not run on the EDT, or every external change would freeze the UI
+        // for the duration of that I/O. See #132.
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicBoolean ranOnEdt = new AtomicBoolean(true);
+        new KiroFolderMonitor(tempDir, events -> {
+            ranOnEdt.set(SwingUtilities.isEventDispatchThread());
+            latch.countDown();
+        });
+
+        Files.writeString(tempDir.resolve("mcp.json"), "{}");
+
+        assertTrue(latch.await(20, TimeUnit.SECONDS), "callback should fire after a file changes");
+        assertFalse(ranOnEdt.get(), "callback should not run on the EDT");
     }
 
     @Test

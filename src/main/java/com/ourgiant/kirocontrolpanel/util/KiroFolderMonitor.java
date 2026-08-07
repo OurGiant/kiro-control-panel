@@ -21,6 +21,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -93,9 +95,15 @@ public final class KiroFolderMonitor {
     private final WatchService watchService;
     private final Timer debounceTimer;
     private final List<ChangeEvent> pendingEvents = Collections.synchronizedList(new ArrayList<>());
+    private final ExecutorService callbackExecutor;
 
     public KiroFolderMonitor(Path root, Consumer<List<ChangeEvent>> onChange) throws IOException {
         watchService = FileSystems.getDefault().newWatchService();
+        callbackExecutor = Executors.newSingleThreadExecutor(r -> {
+            Thread thread = new Thread(r, "kiro-folder-monitor-callback");
+            thread.setDaemon(true);
+            return thread;
+        });
         debounceTimer = new Timer(DEBOUNCE_MILLIS, e -> fireCallback(onChange));
         debounceTimer.setRepeats(false);
 
@@ -108,13 +116,19 @@ public final class KiroFolderMonitor {
         thread.start();
     }
 
+    /**
+     * The {@code javax.swing.Timer} that debounces bursts of events fires on the EDT, but
+     * consumers of this callback do real file/DB I/O (e.g. {@code ChangeLogService.record},
+     * SQLite reindexing) -- so the actual callback dispatch happens on a dedicated background
+     * thread instead of inline in the Timer's {@code ActionListener}. See #132.
+     */
     private void fireCallback(Consumer<List<ChangeEvent>> onChange) {
         List<ChangeEvent> snapshot;
         synchronized (pendingEvents) {
             snapshot = new ArrayList<>(pendingEvents);
             pendingEvents.clear();
         }
-        onChange.accept(snapshot);
+        callbackExecutor.execute(() -> onChange.accept(snapshot));
     }
 
     /**
@@ -130,6 +144,7 @@ public final class KiroFolderMonitor {
         } catch (IOException e) {
             logger.warn("Failed to close folder monitor watch service", e);
         }
+        callbackExecutor.shutdownNow();
     }
 
     private void registerTree(Path root) {
