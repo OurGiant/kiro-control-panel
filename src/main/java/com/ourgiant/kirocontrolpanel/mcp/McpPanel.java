@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -42,6 +44,11 @@ public class McpPanel extends JPanel {
     private final TableRowSorter<McpServerTableModel> rowSorter = new TableRowSorter<>(tableModel);
     private final JTextField filterField = SwingLayoutUtils.createFilterField(this::applyFilter);
     private final JLabel registryWarningLabel = new JLabel(" ");
+
+    // Issue #139: names a reachable-but-partially-approving org registry ignores. Empty until the
+    // background check (below) resolves, and stays empty forever for the common non-enterprise case.
+    private Set<String> ignoredServerNames = Set.of();
+    private boolean registryUnreachableDetected = false;
 
     private JButton editButton;
     private JButton duplicateButton;
@@ -163,16 +170,46 @@ public class McpPanel extends JPanel {
                     return;
                 }
                 if (status.registryUnreachable()) {
+                    registryUnreachableDetected = true;
                     registryWarningLabel.setText(status.httpStatusCode() != null
                         ? "⚠ Your organization's MCP registry is unreachable (HTTP " + status.httpStatusCode()
                             + ") -- all MCP servers are currently unavailable, regardless of local configuration."
                         : "⚠ Your organization's MCP registry is unreachable -- all MCP servers are "
                             + "currently unavailable, regardless of local configuration.");
                     registryWarningLabel.setVisible(true);
+                    return;
                 }
+                ignoredServerNames = status.ignoredServerNames();
+                tableModel.setIgnoredServerNames(ignoredServerNames);
+                updateRegistryBlockedBanner();
             }
         };
         worker.execute();
+    }
+
+    /**
+     * Issue #139: unlike the total-outage banner above (a one-time, permanent state once
+     * detected), this reflects the *current scope's* enabled servers against the account-wide
+     * ignored-name set, so it's recomputed on every {@link #reloadTable()} -- including scope
+     * switches -- not just once at startup. Deliberately only flags servers enabled locally: a
+     * server already disabled here wasn't going to run regardless of registry approval.
+     */
+    private void updateRegistryBlockedBanner() {
+        if (registryUnreachableDetected) {
+            return;
+        }
+        List<String> blocked = tableModel.getConfig().getMcpServers().entrySet().stream()
+            .filter(entry -> !entry.getValue().isDisabled() && ignoredServerNames.contains(entry.getKey()))
+            .map(Map.Entry::getKey)
+            .sorted()
+            .toList();
+        if (blocked.isEmpty()) {
+            registryWarningLabel.setVisible(false);
+            return;
+        }
+        registryWarningLabel.setText("⚠ " + blocked.size() + " server(s) enabled here aren't in your "
+            + "organization's approved MCP registry and won't actually run: " + String.join(", ", blocked));
+        registryWarningLabel.setVisible(true);
     }
 
     private Path currentConfigPath() {
@@ -190,6 +227,7 @@ public class McpPanel extends JPanel {
             : (scope.isGlobal() ? configService.loadGlobal() : configService.loadWorkspace(scope.workspaceRoot()));
         tableModel.setConfig(config);
         updateButtonState();
+        updateRegistryBlockedBanner();
 
         Path configPath = currentConfigPath();
         if (configPath != null) {

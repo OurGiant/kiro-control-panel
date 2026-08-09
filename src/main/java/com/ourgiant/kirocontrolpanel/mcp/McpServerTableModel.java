@@ -3,6 +3,7 @@ package com.ourgiant.kirocontrolpanel.mcp;
 import javax.swing.table.AbstractTableModel;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Read-only table view over the current scope's {@link McpConfigFile}. Rows
@@ -14,10 +15,19 @@ class McpServerTableModel extends AbstractTableModel {
 
     private McpConfigFile config = new McpConfigFile();
     private List<String> names = new ArrayList<>();
+    // Server names a reachable-but-partially-approving org MCP registry ignores (issue #139).
+    // Set independently of setConfig() so it survives scope reloads until the next background
+    // registry check -- it reflects the whole account, not any one scope's config file.
+    private Set<String> ignoredServerNames = Set.of();
 
     void setConfig(McpConfigFile config) {
         this.config = config != null ? config : new McpConfigFile();
         this.names = new ArrayList<>(this.config.getMcpServers().keySet());
+        fireTableDataChanged();
+    }
+
+    void setIgnoredServerNames(Set<String> ignoredServerNames) {
+        this.ignoredServerNames = ignoredServerNames != null ? ignoredServerNames : Set.of();
         fireTableDataChanged();
     }
 
@@ -54,10 +64,22 @@ class McpServerTableModel extends AbstractTableModel {
         return switch (columnIndex) {
             case 0 -> names.get(rowIndex);
             case 1 -> server.isRemote() ? "Remote" : "Local";
-            case 2 -> server.isDisabled() ? "Disabled" : "Enabled";
+            case 2 -> statusText(server, names.get(rowIndex));
             case 3 -> summarize(server);
             default -> "";
         };
+    }
+
+    /**
+     * A server the org registry ignores never actually runs even though it's enabled locally
+     * (issue #139) -- worth flagging here since a disabled server's registry status is moot, it
+     * wasn't going to run either way.
+     */
+    private String statusText(McpServerConfig server, String name) {
+        if (server.isDisabled()) {
+            return "Disabled";
+        }
+        return ignoredServerNames.contains(name) ? "Enabled (blocked by org registry)" : "Enabled";
     }
 
     private static String summarize(McpServerConfig server) {
