@@ -43,7 +43,10 @@ that name.
   with a "Refresh" button that pulls the current list live from GitHub;
   for enterprise/IDC-managed accounts, a background check warns when the
   org's MCP registry is unreachable, since kiro-cli silently disables
-  every MCP server (regardless of local config) in that state
+  every MCP server (regardless of local config) in that state; when the
+  registry is reachable but only approves a subset of what's configured,
+  each affected server's Status column and a summary banner call out
+  which ones kiro-cli is silently ignoring
 - **Steering Docs**: create/edit/delete `.kiro/steering/*.md`, including
   front-matter inclusion modes (always/fileMatch/manual/auto), with
   scaffolded starter content for `product.md`/`tech.md`/`structure.md`
