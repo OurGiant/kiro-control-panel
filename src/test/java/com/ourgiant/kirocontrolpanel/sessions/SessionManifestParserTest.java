@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -117,14 +118,51 @@ class SessionManifestParserTest {
 
     @Test
     void unrecognizedBuiltInToolKindIsSkippedRatherThanCrashingOrGuessing() throws IOException {
-        String toolResultsWithUnconfirmedWriteKind = """
-            {"version":"v1","kind":"ToolResults","data":{"message_id":"m3","content":[],"results":{"t1":{"tool":{"tool_use_purpose":"write a file","kind":{"BuiltIn":{"FileWrite":{"path":"/home/example/projects/demo/out.txt"}}}},"result":{"Success":{"items":[]}}}}}}""";
-        Path jsonl = jsonlOf(PROMPT_LINE, toolResultsWithUnconfirmedWriteKind, ASSISTANT_FINAL_LINE);
+        String toolResultsWithUnrecognizedKind = """
+            {"version":"v1","kind":"ToolResults","data":{"message_id":"m3","content":[],"results":{"t1":{"tool":{"tool_use_purpose":"do something new","kind":{"BuiltIn":{"SomeFutureToolKind":{"path":"/home/example/projects/demo/out.txt"}}}},"result":{"Success":{"items":[]}}}}}}""";
+        Path jsonl = jsonlOf(PROMPT_LINE, toolResultsWithUnrecognizedKind, ASSISTANT_FINAL_LINE);
 
         TranscriptStats stats = SessionManifestParser.parseTranscript(jsonl, 0);
 
         assertEquals(2, stats.messageCount());
-        assertTrue(stats.filesTouched().isEmpty()); // FileWrite's real shape is unconfirmed -- not guessed
+        assertTrue(stats.filesTouched().isEmpty()); // unrecognized tool kinds contribute nothing
+    }
+
+    @Test
+    void fileWriteToolResultAddsItsPathToFilesTouched() throws IOException {
+        String toolResultsWithFileWriteCreate = """
+            {"version":"v1","kind":"ToolResults","data":{"message_id":"m3","content":[],"results":{"t1":{"tool":{"tool_use_purpose":"create a file","kind":{"BuiltIn":{"FileWrite":{"command":"create","path":"/home/example/projects/demo/out.txt","content":"hello"}}}},"result":{"Success":{"items":[]}}}}}}""";
+        Path jsonl = jsonlOf(PROMPT_LINE, toolResultsWithFileWriteCreate, ASSISTANT_FINAL_LINE);
+
+        TranscriptStats stats = SessionManifestParser.parseTranscript(jsonl, 0);
+
+        assertEquals(2, stats.messageCount());
+        assertEquals(List.of("/home/example/projects/demo/out.txt"), stats.filesTouched());
+    }
+
+    @Test
+    void fileWriteToolResultAddsItsPathRegardlessOfCommandSubType() throws IOException {
+        String toolResultsWithFileWriteStrReplace = """
+            {"version":"v1","kind":"ToolResults","data":{"message_id":"m3","content":[],"results":{"t1":{"tool":{"tool_use_purpose":"edit a file","kind":{"BuiltIn":{"FileWrite":{"command":"strReplace","path":"/home/example/projects/demo/existing.txt","oldStr":"a","newStr":"b"}}}},"result":{"Success":{"items":[]}}}}}}""";
+        Path jsonl = jsonlOf(PROMPT_LINE, toolResultsWithFileWriteStrReplace, ASSISTANT_FINAL_LINE);
+
+        TranscriptStats stats = SessionManifestParser.parseTranscript(jsonl, 0);
+
+        assertEquals(List.of("/home/example/projects/demo/existing.txt"), stats.filesTouched());
+    }
+
+    @Test
+    void executeCmdToolResultDoesNotContributeToFilesTouched() throws IOException {
+        String toolResultsWithExecuteCmd = """
+            {"version":"v1","kind":"ToolResults","data":{"message_id":"m3","content":[],"results":{"t1":{"tool":{"tool_use_purpose":"run a command","kind":{"BuiltIn":{"ExecuteCmd":{"command":"mkdir -p /home/example/projects/demo/out","working_dir":null}}}},"result":{"Success":{"items":[]}}}}}}""";
+        Path jsonl = jsonlOf(PROMPT_LINE, toolResultsWithExecuteCmd, ASSISTANT_FINAL_LINE);
+
+        TranscriptStats stats = SessionManifestParser.parseTranscript(jsonl, 0);
+
+        // ExecuteCmd carries a raw shell string, not a structured file reference -- deriving
+        // touched paths from it would mean guessing/parsing shell syntax, which this parser
+        // deliberately avoids. See class Javadoc.
+        assertTrue(stats.filesTouched().isEmpty());
     }
 
     @Test

@@ -1207,6 +1207,25 @@ record shape) were confirmed genuinely incompatible during the same
 research pass, validating the issue's own non-goal of deferring IDE
 support rather than requiring a change to it.
 
+**Files-touched pane populated once the write shape was finally confirmed
+(issue #144).** The detail pane's "files touched" list was fully wired
+from day one but stayed empty in practice, since #117 shipped without ever
+observing a real file-write or shell-exec `BuiltIn` record. Inspecting
+this dev machine's own accumulated session history (real usage since
+#117 landed) surfaced both: `BuiltIn.FileWrite` is
+`{"command":"create"|"strReplace"|..., "path":"...", ...command-specific
+fields}`, with `path` present the same way regardless of `command`, so
+`SessionManifestParser` now takes it unconditionally into `filesTouched`.
+`BuiltIn.ExecuteCmd` is `{"command":"<shell string>","working_dir":...}` —
+a raw shell command, not a structured file reference — and is
+deliberately left out of `filesTouched`: recovering touched paths from
+arbitrary shell syntax would mean heuristically parsing shell commands
+rather than reading a confirmed field, the same guess-avoidance judgment
+call `FileRead`'s exclusion already made. Existing indexed sessions need
+"Rebuild Index" (`File > Settings`) to pick up file writes from before
+this fix, since incremental reindexing only walks transcript lines past
+what was already indexed.
+
 **`org.xerial:sqlite-jdbc` is a new dependency, and a deliberate reversal**
 of this document's own prior "not needed for pure file management"
 stance (also the reasoning behind the Change Log feature's plain-JSONL
@@ -1305,4 +1324,4 @@ real FTS5 search returning ranked snippet matches, and that
 enable/location/rebuild controls — the search/reload regression above was
 found and fixed during this same pass.
 
-301 tests total.
+345 tests total.
