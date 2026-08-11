@@ -30,13 +30,20 @@ import java.util.Set;
  * {@code ToolResults}. Tool calls appear as {@code AssistantMessage} content
  * entries of kind {@code toolUse}; their results appear in the following
  * {@code ToolResults} record, keyed by tool-use id, under
- * {@code results.<id>.tool.kind.BuiltIn.<ToolName>}. Only the {@code FileRead}
- * shape has been observed in real data -- it's a read, not a write, so it
- * deliberately does not contribute to {@code filesTouched} (which is meant to
- * answer "what did this session write or edit"). File-write and shell-exec
- * {@code BuiltIn} shapes are unconfirmed; unrecognized tool kinds are skipped
- * (logged at debug), never treated as an error, so the parser degrades
- * gracefully rather than guessing field names.
+ * {@code results.<id>.tool.kind.BuiltIn.<ToolName>}. {@code FileRead} is a
+ * read, not a write, so it deliberately does not contribute to
+ * {@code filesTouched} (which is meant to answer "what did this session write
+ * or edit"). {@code FileWrite} (confirmed against real data, issue #144) is
+ * {@code {"command":"create"|"strReplace"|..., "path":"...", ...}} -- {@code
+ * path} is present regardless of the {@code command} sub-type, so it's taken
+ * unconditionally. {@code ExecuteCmd} (also confirmed, issue #144) is {@code
+ * {"command":"<shell string>","working_dir":...}} -- a raw shell command, not
+ * a structured file reference, so it's deliberately left out of
+ * {@code filesTouched}: reliably recovering touched paths from arbitrary
+ * shell syntax would mean guessing/heuristic-parsing rather than reading a
+ * confirmed field, which this parser avoids. Other unrecognized tool kinds
+ * are skipped (logged at debug), never treated as an error, so the parser
+ * degrades gracefully rather than guessing field names.
  */
 public final class SessionManifestParser {
     private static final Logger logger = LoggerFactory.getLogger(SessionManifestParser.class);
@@ -226,6 +233,12 @@ public final class SessionManifestParser {
                     case "FileRead" -> {
                         // A read, not a write -- filesTouched means "written or edited", so this
                         // is deliberately not added. See class Javadoc.
+                    }
+                    case "FileWrite" -> {
+                        String path = builtIn.path(toolName).path("path").asText(null);
+                        if (path != null && !path.isBlank()) {
+                            filesTouched.add(path);
+                        }
                     }
                     default -> logger.debug(
                         "Unrecognized BuiltIn tool kind '{}', skipping files/repos extraction for it", toolName);
