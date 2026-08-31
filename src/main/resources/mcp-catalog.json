@@ -211,6 +211,27 @@
     }
   },
   {
+    "slug": "docling",
+    "name": "Docling for IBM watsonx",
+    "description": "Convert PDF and other documents into structured formats and generate new documents with Docling MCP, including support for RAG workflows",
+    "requirement": "Requires UV Installed and Docling for IBM watsonx subscription. Official documentation",
+    "config": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "docling-mcp",
+        "docling-mcp-server",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "DOCLING_SERVICE_URL": "https://<your-docling-saas>",
+        "DOCLING_SERVICE_API_KEY": "<your-key>",
+        "DOCLING_CONVERSION_MODE": "remote"
+      }
+    }
+  },
+  {
     "slug": "dynatrace-mcp-server",
     "name": "Dynatrace",
     "description": "Interact with Dynatrace Observability Platform",
@@ -449,6 +470,21 @@
         "TIDB_SSL": "true"
       },
       "disabled": true
+    }
+  },
+  {
+    "slug": "plaud",
+    "name": "Plaud",
+    "description": "Access your Plaud AI voice recordings, transcripts, and AI-generated notes directly from Kiro — search recordings, pull summaries, action items, and full speaker-labeled transcripts.",
+    "requirement": null,
+    "config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@plaud-ai/mcp@latest"
+      ],
+      "disabled": false,
+      "autoApprove": []
     }
   },
   {
