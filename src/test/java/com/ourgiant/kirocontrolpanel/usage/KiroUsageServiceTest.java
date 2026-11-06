@@ -81,4 +81,39 @@ class KiroUsageServiceTest {
 
         assertTrue(exception.getMessage().contains("isn't on your PATH"));
     }
+
+    // -- V3 _kiro/account/getUsage (issue #149) --
+
+    @Test
+    void v3SuccessfulResultIsParsedWithTheSameShapeAsV2() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode result = mapper.createObjectNode()
+            .put("success", true)
+            .put("message", "Plan: KIRO PRO+ | 1 usage breakdowns")
+            .set("data", mapper.readTree(SAMPLE_DATA_JSON));
+
+        KiroUsageService.UsageSnapshot snapshot = KiroUsageService.parseV3Result(result);
+        assertEquals("KIRO PRO+", snapshot.planName());
+        assertEquals("2026-08-01", snapshot.billingCycleReset());
+        assertEquals(1980.8, snapshot.breakdowns().get(0).used(), 1e-9);
+    }
+
+    @Test
+    void v3AdminManagedPlanIsADistinctAnswerNotAFailure() throws Exception {
+        JsonNode result = new ObjectMapper().readTree(
+            "{\"success\": true, \"message\": \"Your plan is managed by admin\"}");
+        KiroUsageService.AdminManagedPlanException e = assertThrows(
+            KiroUsageService.AdminManagedPlanException.class, () -> KiroUsageService.parseV3Result(result));
+        assertEquals("Your plan is managed by admin", e.getMessage());
+    }
+
+    @Test
+    void v3FailureCarriesKiroCliMessageSoTheCallerCanFallBack() throws Exception {
+        JsonNode result = new ObjectMapper().readTree(
+            "{\"success\": false, \"message\": \"Failed to retrieve usage information: boom\"}");
+        KiroUsageService.UsageFetchException e = assertThrows(
+            KiroUsageService.UsageFetchException.class, () -> KiroUsageService.parseV3Result(result));
+        assertFalse(e instanceof KiroUsageService.AdminManagedPlanException);
+        assertTrue(e.getMessage().contains("boom"));
+    }
 }
