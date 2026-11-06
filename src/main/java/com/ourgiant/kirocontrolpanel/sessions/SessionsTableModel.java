@@ -8,7 +8,7 @@ import java.util.List;
 
 /** Read-only table view over a list of {@link SessionManifest}, newest first (caller sorts). */
 class SessionsTableModel extends AbstractTableModel {
-    private static final String[] COLUMNS = {"Date", "CWD", "Opening Prompt", "Files Touched"};
+    private static final String[] COLUMNS = {"Date", "CWD", "Opening Prompt", "Files Touched", "Engine"};
     private static final DateTimeFormatter TIMESTAMP_FORMAT =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
     private static final int PROMPT_SNIPPET_MAX_LENGTH = 80;
@@ -52,6 +52,7 @@ class SessionsTableModel extends AbstractTableModel {
             case 1 -> manifest.cwd();
             case 2 -> snippet(manifest.title());
             case 3 -> manifest.filesTouchedCount();
+            case 4 -> manifest.engine().label();
             default -> "";
         };
     }

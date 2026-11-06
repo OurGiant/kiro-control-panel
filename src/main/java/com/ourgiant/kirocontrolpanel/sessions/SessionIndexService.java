@@ -65,44 +65,92 @@ public final class SessionIndexService implements AutoCloseable {
         notifyListener();
     }
 
-    /**
-     * Walks every {@code <uuid>.json} sidecar under {@code sessionsCliDir}, re-indexing only
-     * those whose sidecar or transcript file has changed since it was last indexed, then prunes
-     * rows for sessions whose files no longer exist. Notifies the update listener once at the
-     * end, not per-file, so a large first-run scan doesn't thrash the UI.
-     */
+    /** V2-only scan, kept for callers and tests that only know the {@code sessions/cli} store. */
     public void scanAndIndex(Path sessionsCliDir) throws IOException, SQLException {
-        if (!Files.isDirectory(sessionsCliDir)) {
-            return;
-        }
+        scanAndIndex(sessionsCliDir, null);
+    }
+
+    /**
+     * Walks every V2 {@code <uuid>.json} sidecar under {@code sessionsCliDir} and, when
+     * {@code v3SessionsRoot} is non-null, every V3 {@code <hash>/sess_*}{@code /session.json}
+     * under it (issue #147 -- both stores live under {@code ~/.kiro/sessions}). Re-indexes only
+     * sessions whose sidecar or transcript changed since last indexed, then prunes rows for
+     * sessions whose files no longer exist. Notifies the update listener once at the end, not
+     * per-file, so a large first-run scan doesn't thrash the UI.
+     */
+    public void scanAndIndex(Path sessionsCliDir, Path v3SessionsRoot) throws IOException, SQLException {
         Set<String> presentSessionIds = new HashSet<>();
         synchronized (lock) {
-            try (DirectoryStream<Path> stream = Files.newDirectoryStream(sessionsCliDir, "*.json")) {
-                for (Path jsonSidecar : stream) {
-                    String sessionId = stemOf(jsonSidecar);
-                    presentSessionIds.add(sessionId);
-                    try {
-                        if (needsReindexLocked(sessionId, jsonSidecar)) {
-                            indexOneLocked(jsonSidecar);
-                        }
-                    } catch (IOException | SQLException e) {
-                        logger.warn("Failed to index session file {}", jsonSidecar, e);
+            if (sessionsCliDir != null && Files.isDirectory(sessionsCliDir)) {
+                try (DirectoryStream<Path> stream = Files.newDirectoryStream(sessionsCliDir, "*.json")) {
+                    for (Path jsonSidecar : stream) {
+                        indexIfChangedLocked(jsonSidecar, presentSessionIds);
                     }
                 }
+            }
+            for (Path sessionJson : listV3Sidecars(v3SessionsRoot)) {
+                indexIfChangedLocked(sessionJson, presentSessionIds);
             }
             pruneMissingLocked(presentSessionIds);
         }
         notifyListener();
     }
 
-    /** Drops and fully rebuilds the index from {@code sessionsCliDir} -- the Settings dialog's
-     * "Rebuild Index" action. */
+    /** Every {@code <hash>/sess_*}{@code /session.json} under the V3 root. The V2 {@code cli}
+     * store sits in the same root and is skipped. */
+    public static List<Path> listV3Sidecars(Path v3SessionsRoot) throws IOException {
+        List<Path> sidecars = new ArrayList<>();
+        if (v3SessionsRoot == null || !Files.isDirectory(v3SessionsRoot)) {
+            return sidecars;
+        }
+        try (DirectoryStream<Path> workspaces = Files.newDirectoryStream(v3SessionsRoot, Files::isDirectory)) {
+            for (Path workspaceDir : workspaces) {
+                if (SessionEngine.V2_STORE_DIR_NAME.equals(workspaceDir.getFileName().toString())) {
+                    continue;
+                }
+                sidecars.addAll(listV3SidecarsInWorkspaceDir(workspaceDir));
+            }
+        }
+        return sidecars;
+    }
+
+    static List<Path> listV3SidecarsInWorkspaceDir(Path workspaceDir) throws IOException {
+        List<Path> sidecars = new ArrayList<>();
+        try (DirectoryStream<Path> sessions = Files.newDirectoryStream(workspaceDir,
+                p -> Files.isDirectory(p) && SessionEngine.isV3SessionDir(p))) {
+            for (Path sessionDir : sessions) {
+                Path sessionJson = sessionDir.resolve(SessionEngine.V3_SIDECAR_NAME);
+                if (Files.isRegularFile(sessionJson)) {
+                    sidecars.add(sessionJson);
+                }
+            }
+        }
+        return sidecars;
+    }
+
+    private void indexIfChangedLocked(Path sidecar, Set<String> presentSessionIds) {
+        String sessionId = SessionEngine.ofSidecar(sidecar).sessionIdFor(sidecar);
+        presentSessionIds.add(sessionId);
+        try {
+            if (needsReindexLocked(sessionId, sidecar)) {
+                indexOneLocked(sidecar);
+            }
+        } catch (IOException | SQLException e) {
+            logger.warn("Failed to index session file {}", sidecar, e);
+        }
+    }
+
+    /** Drops and fully rebuilds the index -- the Settings dialog's "Rebuild Index" action. */
     public void rebuildIndex(Path sessionsCliDir) throws IOException, SQLException {
+        rebuildIndex(sessionsCliDir, null);
+    }
+
+    public void rebuildIndex(Path sessionsCliDir, Path v3SessionsRoot) throws IOException, SQLException {
         synchronized (lock) {
             SessionIndexSchema.drop(connection);
             SessionIndexSchema.create(connection);
         }
-        scanAndIndex(sessionsCliDir);
+        scanAndIndex(sessionsCliDir, v3SessionsRoot);
     }
 
     public List<SessionManifest> listAll() throws SQLException {
@@ -184,8 +232,9 @@ public final class SessionIndexService implements AutoCloseable {
     // -- internals; the *Locked methods assume `lock` is already held --
 
     private void indexOneLocked(Path jsonSidecar) throws IOException, SQLException {
-        String sessionId = stemOf(jsonSidecar);
-        Path jsonl = jsonSidecar.resolveSibling(sessionId + ".jsonl");
+        SessionEngine engine = SessionEngine.ofSidecar(jsonSidecar);
+        String sessionId = engine.sessionIdFor(jsonSidecar);
+        Path jsonl = engine.transcriptFor(jsonSidecar);
 
         SessionSidecar sidecar = SessionManifestParser.parseSidecar(jsonSidecar);
         long jsonMtime = Files.getLastModifiedTime(jsonSidecar).toMillis();
@@ -193,6 +242,13 @@ public final class SessionIndexService implements AutoCloseable {
         Bookkeeping existing = queryBookkeepingLocked(sessionId);
         long fromLine = existing != null ? existing.jsonlIndexedLines() : 0L;
         TranscriptStats delta = SessionManifestParser.parseTranscript(jsonl, fromLine);
+        if (existing != null && delta.linesConsumed() < fromLine) {
+            // The transcript shrank (e.g. V3's /rewind), so it wasn't append-only after all:
+            // drop what was indexed and start over rather than keep messages that are gone.
+            deleteSessionLocked(sessionId);
+            existing = null;
+            delta = SessionManifestParser.parseTranscript(jsonl, 0);
+        }
         long jsonlMtime = Files.isRegularFile(jsonl) ? Files.getLastModifiedTime(jsonl).toMillis() : 0L;
 
         String title = sidecar.title() != null && !sidecar.title().isBlank() ? sidecar.title() : delta.firstPromptText();
@@ -235,7 +291,7 @@ public final class SessionIndexService implements AutoCloseable {
         if (jsonMtime != existing.jsonMtimeMillis()) {
             return true;
         }
-        Path jsonl = jsonSidecar.resolveSibling(sessionId + ".jsonl");
+        Path jsonl = SessionEngine.ofSidecar(jsonSidecar).transcriptFor(jsonSidecar);
         long jsonlMtime = Files.isRegularFile(jsonl) ? Files.getLastModifiedTime(jsonl).toMillis() : 0L;
         return jsonlMtime != existing.jsonlMtimeMillis();
     }
@@ -352,11 +408,6 @@ public final class SessionIndexService implements AutoCloseable {
                 ps.executeUpdate();
             }
         }
-    }
-
-    private static String stemOf(Path jsonSidecar) {
-        String name = jsonSidecar.getFileName().toString();
-        return name.endsWith(".json") ? name.substring(0, name.length() - ".json".length()) : name;
     }
 
     private void notifyListener() {

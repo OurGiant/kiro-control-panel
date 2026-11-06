@@ -335,4 +335,20 @@ class KiroSetupScannerTest {
 
         assertEquals(2, findings.size());
     }
+
+    @Test
+    void agentsStillInV2FormatAreFlaggedStructuralForTheV3Upgrade() throws IOException {
+        Path agentsDir = kiroDir.resolve("agents");
+        Files.createDirectories(agentsDir);
+        Files.writeString(agentsDir.resolve("legacy.json"), "{\"allowedTools\": [\"fs_read\"]}");
+        Files.writeString(agentsDir.resolve("converted.json"),
+            "{\"allowedTools\": [\"fs_read\"], \"permissions\": {\"rules\": []}}");
+
+        var findings = scanner.scanAgents(scope);
+        assertEquals(1, findings.size());
+        assertEquals(FindingSeverity.STRUCTURAL, findings.get(0).severity());
+        assertEquals(agentsDir.resolve("legacy.json"), findings.get(0).path());
+        assertTrue(findings.get(0).message().contains("V3"));
+        assertFalse(findings.get(0).isFixable());
+    }
 }

@@ -96,8 +96,21 @@ public final class KiroFolderMonitor {
     private final Timer debounceTimer;
     private final List<ChangeEvent> pendingEvents = Collections.synchronizedList(new ArrayList<>());
     private final ExecutorService callbackExecutor;
+    private final boolean ignoreKiroManagedStateDirs;
 
     public KiroFolderMonitor(Path root, Consumer<List<ChangeEvent>> onChange) throws IOException {
+        this(root, onChange, true);
+    }
+
+    /**
+     * @param ignoreKiroManagedStateDirs false only for a monitor that exists to watch Kiro's own
+     *     state, i.e. the Sessions tab's watcher rooted at {@code ~/.kiro/sessions} (issue #147:
+     *     V3 sessions live directly under it, not under {@code sessions/cli}). Every config-change
+     *     monitor keeps the default of true.
+     */
+    public KiroFolderMonitor(Path root, Consumer<List<ChangeEvent>> onChange, boolean ignoreKiroManagedStateDirs)
+        throws IOException {
+        this.ignoreKiroManagedStateDirs = ignoreKiroManagedStateDirs;
         watchService = FileSystems.getDefault().newWatchService();
         callbackExecutor = Executors.newSingleThreadExecutor(r -> {
             Thread thread = new Thread(r, "kiro-folder-monitor-callback");
@@ -152,7 +165,7 @@ public final class KiroFolderMonitor {
             Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
                 @Override
                 public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                    if (isGitInternal(dir) || isKiroManagedStateDir(dir)) {
+                    if (isGitInternal(dir) || (ignoreKiroManagedStateDirs && isKiroManagedStateDir(dir))) {
                         return FileVisitResult.SKIP_SUBTREE;
                     }
                     registerQuietly(dir);
@@ -214,7 +227,7 @@ public final class KiroFolderMonitor {
                     // watch on it and never let its creation itself count as notification-worthy.
                     continue;
                 }
-                if (isKiroManagedStateDir(changed)) {
+                if (ignoreKiroManagedStateDirs && isKiroManagedStateDir(changed)) {
                     // Kiro's own ephemeral session/extension state (see class Javadoc) -- same
                     // treatment as .git above.
                     continue;

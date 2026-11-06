@@ -24,7 +24,7 @@ class SessionsTableModelTest {
         SessionsTableModel model = new SessionsTableModel();
 
         assertEquals(0, model.getRowCount());
-        assertEquals(4, model.getColumnCount());
+        assertEquals(5, model.getColumnCount());
     }
 
     @Test
@@ -38,6 +38,7 @@ class SessionsTableModelTest {
         assertEquals("/home/example/demo", model.getValueAt(0, 1));
         assertEquals("what should I change and why", model.getValueAt(0, 2));
         assertEquals(1, model.getValueAt(0, 3));
+        assertEquals("V2", model.getValueAt(0, 4));
         assertEquals(someManifest("what should I change and why"), model.sessionAt(0));
     }
 

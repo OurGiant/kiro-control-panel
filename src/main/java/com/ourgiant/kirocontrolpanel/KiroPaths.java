@@ -70,6 +70,16 @@ public final class KiroPaths {
      * {@code sessions} -- confirmed by reading that class before relying on it.
      */
     public static Path globalSessionsCliDir() {
-        return globalKiroHome().resolve("sessions").resolve("cli");
+        return globalSessionsDir().resolve("cli");
+    }
+
+    /**
+     * The parent of both session stores (issue #147): V2 writes under {@code sessions/cli}, V3
+     * under {@code sessions/<workspace-hash>/sess_*}. A watcher rooted here has to turn off
+     * {@code KiroFolderMonitor}'s skip of directories named {@code sessions} -- see
+     * {@code SessionsWatcher}.
+     */
+    public static Path globalSessionsDir() {
+        return globalKiroHome().resolve("sessions");
     }
 }

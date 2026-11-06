@@ -1,6 +1,7 @@
 package com.ourgiant.kirocontrolpanel;
 
 import com.ourgiant.kirocontrolpanel.sessions.SessionIndexService;
+import com.ourgiant.kirocontrolpanel.sessions.SessionEngine;
 import com.ourgiant.kirocontrolpanel.sessions.SessionManifest;
 import com.ourgiant.kirocontrolpanel.snapshot.SnapshotFrequency;
 import com.ourgiant.kirocontrolpanel.snapshot.SnapshotService;
@@ -349,7 +350,7 @@ public class SettingsDialog extends JDialog {
             SwingWorker<Void, Void> worker = new SwingWorker<>() {
                 @Override
                 protected Void doInBackground() throws IOException, SQLException {
-                    sessionIndexService.rebuildIndex(KiroPaths.globalSessionsCliDir());
+                    sessionIndexService.rebuildIndex(KiroPaths.globalSessionsCliDir(), KiroPaths.globalSessionsDir());
                     return null;
                 }
 
@@ -397,7 +398,12 @@ public class SettingsDialog extends JDialog {
     private void onCleanUpEmptySessions(SessionIndexService sessionIndexService, JButton cleanupButton) {
         List<SessionManifest> emptySessions;
         try {
-            emptySessions = sessionIndexService.listAll().stream().filter(SessionManifest::isEmpty).toList();
+            // V2 only: `kiro-cli chat --delete-session` only knows the V2 store, and V3 session
+            // ids aren't the bare UUIDs KiroCliSessionDeleter insists on (issue #147).
+            emptySessions = sessionIndexService.listAll().stream()
+                .filter(SessionManifest::isEmpty)
+                .filter(m -> m.engine() == SessionEngine.V2)
+                .toList();
         } catch (SQLException ex) {
             logger.warn("Failed to check for empty sessions", ex);
             JOptionPane.showMessageDialog(this,

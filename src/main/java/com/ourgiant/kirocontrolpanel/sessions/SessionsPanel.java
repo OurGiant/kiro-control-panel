@@ -13,6 +13,7 @@ import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -71,6 +72,7 @@ public class SessionsPanel extends JPanel {
     private final JButton viewTranscriptButton = new JButton("View Transcript...");
     private final JButton viewRawJsonButton = new JButton("View Raw JSON...");
     private final JButton resumeInKiroCliButton = new JButton("Resume in kiro-cli...");
+    private final JButton continueInV3Button = new JButton("Continue in V3...");
     private final JButton revealFileButton = new JButton("Reveal File");
     private final JButton revealSessionButton = new JButton("Reveal Session Files");
 
@@ -152,10 +154,13 @@ public class SessionsPanel extends JPanel {
         viewTranscriptButton.addActionListener(e -> onViewTranscript());
         viewRawJsonButton.addActionListener(e -> onViewRawJson());
         resumeInKiroCliButton.addActionListener(e -> onResumeInKiroCli());
+        continueInV3Button.addActionListener(e -> onContinueInV3());
+        continueInV3Button.setToolTipText("Open a V3 copy of this V2 session in kiro-cli. The V2 original is kept.");
         revealFileButton.addActionListener(e -> onRevealFile());
         revealSessionButton.addActionListener(e -> onRevealSession());
         panel.add(SwingLayoutUtils.createVerticalButtonPanel(
-                viewTranscriptButton, viewRawJsonButton, resumeInKiroCliButton, revealFileButton, revealSessionButton),
+                viewTranscriptButton, viewRawJsonButton, resumeInKiroCliButton, continueInV3Button, revealFileButton,
+                revealSessionButton),
             BorderLayout.EAST);
 
         return panel;
@@ -256,6 +261,7 @@ public class SessionsPanel extends JPanel {
             viewTranscriptButton.setEnabled(false);
             viewRawJsonButton.setEnabled(false);
             resumeInKiroCliButton.setEnabled(false);
+            continueInV3Button.setEnabled(false);
             revealFileButton.setEnabled(false);
             revealSessionButton.setEnabled(false);
             return;
@@ -269,16 +275,19 @@ public class SessionsPanel extends JPanel {
         viewTranscriptButton.setEnabled(true);
         viewRawJsonButton.setEnabled(true);
         resumeInKiroCliButton.setEnabled(true);
+        continueInV3Button.setEnabled(selectedManifest.engine() == SessionEngine.V2);
         revealFileButton.setEnabled(false);
         revealSessionButton.setEnabled(true);
     }
 
     private static String summaryText(SessionManifest manifest) {
+        String reason = manifest.sessionCreatedReason();
         return "Session: " + manifest.sessionId() + "\n"
+            + "Engine: " + manifest.engine().label() + "\n"
             + "Directory: " + manifest.cwd() + "\n"
             + "Started: " + SUMMARY_TIMESTAMP_FORMAT.format(manifest.createdAt()) + "\n"
             + "Last activity: " + SUMMARY_TIMESTAMP_FORMAT.format(manifest.updatedAt()) + "\n"
-            + "Started via: " + manifest.sessionCreatedReason() + "\n"
+            + (reason != null && !reason.isBlank() ? "Started via: " + reason + "\n" : "")
             + "Prompt: " + (manifest.title() != null ? manifest.title() : "(none)");
     }
 
@@ -341,8 +350,30 @@ public class SessionsPanel extends JPanel {
         if (selectedManifest == null) {
             return;
         }
+        // A V2 session id resumes on V2 by itself. A V3 session needs the engine named
+        // explicitly, since V2 can't open it (issue #147).
+        String engine = selectedManifest.engine() == SessionEngine.V3 ? "v3" : null;
         KiroSessionLauncher.launchSession(this, Paths.get(selectedManifest.cwd()),
-            preferences.isSkipPowerShellProfile(), selectedManifest.sessionId());
+            preferences.isSkipPowerShellProfile(), selectedManifest.sessionId(), engine);
+    }
+
+    /** Resumes a V2 session on the V3 engine. Per Kiro's V3 upgrade docs, kiro-cli makes a V3
+     * copy and keeps the V2 original, so nothing is lost. Saved tool approvals don't carry
+     * over, which is worth saying up front. */
+    private void onContinueInV3() {
+        if (selectedManifest == null || selectedManifest.engine() != SessionEngine.V2) {
+            return;
+        }
+        int choice = JOptionPane.showConfirmDialog(this,
+            "kiro-cli will open a V3 copy of this session. The V2 original stays as it is\n"
+                + "and can still be resumed on V2.\n\n"
+                + "Tool approvals you saved in the V2 session don't carry over.",
+            "Continue in V3", JOptionPane.OK_CANCEL_OPTION, JOptionPane.INFORMATION_MESSAGE);
+        if (choice != JOptionPane.OK_OPTION) {
+            return;
+        }
+        KiroSessionLauncher.launchSession(this, Paths.get(selectedManifest.cwd()),
+            preferences.isSkipPowerShellProfile(), selectedManifest.sessionId(), "v3");
     }
 
     private void onRevealFile() {
@@ -392,6 +423,11 @@ public class SessionsPanel extends JPanel {
     /** Package-private, for tests. */
     JButton getResumeInKiroCliButton() {
         return resumeInKiroCliButton;
+    }
+
+    /** Package-private, for tests. */
+    JButton getContinueInV3Button() {
+        return continueInV3Button;
     }
 
     /** Package-private, for tests. */
