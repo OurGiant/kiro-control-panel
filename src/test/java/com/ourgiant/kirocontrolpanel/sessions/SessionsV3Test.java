@@ -53,7 +53,10 @@ class SessionsV3Test {
         assertEquals(SessionEngine.V3, manifest.engine());
         // fs_write by name, strReplace by ACP kind "edit"; the readFile call is not a write.
         // The relative path is resolved against the session's workspace.
-        assertEquals(List.of(WORKSPACE + "/README.md", "/abs/Other.java"), manifest.filesTouched());
+        // Built with Path so the expectation matches each OS's own separators (Windows CI).
+        Path workspace = Path.of(WORKSPACE);
+        assertEquals(List.of(workspace.resolve("README.md").toString(),
+            workspace.resolve("/abs/Other.java").normalize().toString()), manifest.filesTouched());
 
         TranscriptStats stats = SessionManifestParser.parseTranscript(SessionEngine.V3.transcriptFor(sessionJson), 0);
         assertEquals(2, stats.messages().size());
