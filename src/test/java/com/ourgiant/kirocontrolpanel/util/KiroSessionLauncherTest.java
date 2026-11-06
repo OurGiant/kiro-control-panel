@@ -230,4 +230,23 @@ class KiroSessionLauncherTest {
 
         assertEquals(binary.toAbsolutePath().toString(), found);
     }
+
+    @Test
+    void resumingAV3SessionNamesTheV3EngineOnEveryPlatform() {
+        String id = "sess_2bf6c291-6c4c-48da-8b91-8210a536a0ee";
+        assertEquals("kiro-cli chat --agent-engine v3 --resume-id '" + id + "'; exec bash",
+            KiroSessionLauncher.buildLinuxCommand("/home/me/project", id, "v3").get(5));
+        assertTrue(KiroSessionLauncher.buildWindowsCommand("C:\\plain", false, id, "v3").getLast()
+            .endsWith("kiro-cli chat --agent-engine v3 --resume-id '" + id + "'"));
+        assertTrue(KiroSessionLauncher.buildMacCommand("/Users/me/plain", id, "v3").getLast()
+            .contains("kiro-cli chat --agent-engine v3 --resume-id '" + id + "'"));
+    }
+
+    @Test
+    void nullEngineKeepsTheExistingResumeCommandAndUnknownEnginesAreRejected() {
+        assertEquals(KiroSessionLauncher.buildLinuxCommand("/p", "abc"),
+            KiroSessionLauncher.buildLinuxCommand("/p", "abc", null));
+        assertThrows(IllegalArgumentException.class,
+            () -> KiroSessionLauncher.buildLinuxCommand("/p", "abc", "v3; rm -rf ~"));
+    }
 }

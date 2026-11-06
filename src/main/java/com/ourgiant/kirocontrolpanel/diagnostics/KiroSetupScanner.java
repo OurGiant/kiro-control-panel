@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ourgiant.kirocontrolpanel.KiroPaths;
+import com.ourgiant.kirocontrolpanel.migration.KiroCliV3MigrationService;
 import com.ourgiant.kirocontrolpanel.WorkspaceScope;
 import com.ourgiant.kirocontrolpanel.agents.AgentService;
 import com.ourgiant.kirocontrolpanel.hooks.Hook;
@@ -40,6 +41,8 @@ import java.util.stream.Stream;
  * {@code load(path, workspaceRoot)} method, which does throw.
  */
 public class KiroSetupScanner {
+    private static final com.fasterxml.jackson.databind.ObjectMapper V3_CHECK_MAPPER =
+        com.ourgiant.kirocontrolpanel.util.JsonMapperFactory.createMapper();
     private static final Logger logger = LoggerFactory.getLogger(KiroSetupScanner.class);
 
     private final ObjectMapper mapper = JsonMapperFactory.createMapper();
@@ -221,12 +224,28 @@ public class KiroSetupScanner {
                         agentService.load(path, scope.workspaceRoot());
                     } catch (IOException e) {
                         findings.add(invalid(KiroSurface.AGENTS, scope, path, "Not valid JSON: " + e.getMessage()));
+                        return;
+                    }
+                    if (needsV3Upgrade(path)) {
+                        // No in-app Fix: the conversion rules belong to kiro-cli, which also
+                        // backs the file up first. The V3 upgrade guide runs it (issue #147).
+                        findings.add(structural(KiroSurface.AGENTS, scope, path,
+                            "Uses V2's allowedTools/toolsSettings with no permissions block, so Kiro CLI V3 "
+                                + "skips this agent. Convert it with Help > Upgrade to Kiro CLI V3...", null));
                     }
                 });
         } catch (IOException e) {
             logger.warn("Failed to list agents directory {}", dir, e);
         }
         return findings;
+    }
+
+    private static boolean needsV3Upgrade(Path agentFile) {
+        try {
+            return KiroCliV3MigrationService.needsV3Upgrade(V3_CHECK_MAPPER.readTree(agentFile.toFile()));
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     private static Finding invalid(KiroSurface surface, WorkspaceScope scope, Path path, String message) {

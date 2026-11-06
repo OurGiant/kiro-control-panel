@@ -71,26 +71,30 @@ or the call fails for any reason.
 
 ### Sessions (tab)
 
-Indexes every kiro-cli session transcript under `~/.kiro/sessions/cli/` into
+Indexes every kiro-cli session transcript, from both engines' stores (V2's
+`~/.kiro/sessions/cli/` and V3's `~/.kiro/sessions/<workspace-hash>/sess_*/`), into
 a local SQLite/FTS5 database (never written under `~/.kiro` itself, so it
 never trips the external-change monitor or gets swept into snapshots) and
 shows them as a sortable table — date, working directory, opening prompt,
-files touched — with a detail pane for the selected session (manifest
+files touched, engine (V2/V3) — with a detail pane for the selected session (manifest
 fields plus computed stats — message counts by role, session duration,
 total words exchanged, longest reply, completed turns, credits consumed
 (summed from the sidecar's own per-turn `metering_usage`), and current
 context-window usage — files the session wrote or edited (detected from
-its `FileWrite` tool calls; shell commands aren't parsed for paths, so
+its `FileWrite` tool calls, or V3's file-edit tool calls; shell commands aren't parsed for paths, so
 files touched only via `ExecuteCmd` won't appear) with "Reveal File", "View
 Transcript..." for a readable, role-labeled rendering of the session's
 actual prompts and replies (with its own in-dialog search bar to highlight
 and jump between matches within that transcript; double-clicking a session
 row is a shortcut to the same view), "View Raw JSON..." for the session's
 own sidecar file, and "Resume in kiro-cli..." to reopen that exact
-conversation (`kiro-cli chat --resume-id <id>`) in a brand-new terminal
+conversation (`kiro-cli chat --resume-id <id>`, with `--agent-engine v3` for a
+V3 session) in a brand-new terminal
 window, launched in the session's own recorded working directory — reuses
 the same cross-platform terminal-launching code as this app's existing
-"Launch kiro-cli here" actions elsewhere). The filter field above the table narrows
+"Launch kiro-cli here" actions elsewhere). For a V2 session, "Continue in
+V3..." resumes it on the V3 engine instead: kiro-cli opens a V3 copy and
+keeps the V2 original. The filter field above the table narrows
 results in-memory as you type, same as every other panel; pressing Enter
 instead runs a full-text search over the indexed message content (never
 tool-call/result payloads) and shows ranked, snippet-highlighted matches.
@@ -101,7 +105,24 @@ existing ones — so it never blocks the UI. A Sessions section in
 index database lives, and offers "Rebuild Index" and "Clean Up Empty
 Sessions" buttons — the latter finds sessions with no prompt and no
 recorded messages (confirms the count with you first) and deletes them via
-`kiro-cli chat --delete-session`.
+`kiro-cli chat --delete-session` (V2 sessions only, the store that command
+manages).
+
+### Upgrade to Kiro CLI V3 (Help menu, and the tray icon menu)
+
+A step-by-step guide for moving from kiro-cli V2 to V3 without losing
+settings or sessions. Each step shows its state and runs the matching
+kiro-cli command, with the output in a log pane: back up `~/.kiro` (a
+snapshot zip), update kiro-cli if it's too old to convert agents, convert
+V2 agent configs that V3 would otherwise skip (`kiro-cli agent upgrade`,
+with a dry-run "Preview" first; kiro-cli keeps each original as
+`<name>.json.bak`), and make V3 the default (`chat.agentEngine v3`).
+"Switch Back to V2" undoes the last step. Sessions need no step: V2 sessions
+stay where they are, keep showing in the Sessions tab, and can be carried on
+in V3 with "Continue in V3...". On launch, if V3 isn't your default yet and
+the switch affects something of yours (agents to convert, or V2-only
+session history), the app suggests the guide once per launch, with "Don't
+Ask Again" to stop it. The Kiro Setup Scan also flags V2-format agents.
 
 ### Kiro Setup Scan (Help > Scan Kiro Setup...)
 
@@ -219,7 +240,8 @@ src/main/java/com/ourgiant/kirocontrolpanel/
 ├── diagnostics/              # Kiro Setup Scan (structural checks + fixes)
 ├── changelog/                # Change Log viewer + external-change watchers
 ├── snapshot/                 # Periodic .kiro backup (SnapshotService, SnapshotScheduler)
-├── sessions/                 # Sessions tab: SQLite/FTS5 index of kiro-cli session history
+├── sessions/                 # Sessions tab: SQLite/FTS5 index of kiro-cli session history (V2 + V3 stores)
+├── migration/                # Upgrade to Kiro CLI V3 guide (detection + kiro-cli commands)
 ├── usage/                    # Live usage via kiro-cli's ACP interface (KiroUsageService)
 └── util/                     # FrontMatterParser, JsonMapperFactory,
                                # WorkspaceScopeBar, RawJsonEditorDialog, IconFactory,

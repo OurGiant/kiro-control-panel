@@ -42,6 +42,11 @@ public record SessionManifest(
         return Paths.get(sourceJsonlPath);
     }
 
+    /** Which engine wrote this session, derived from where its sidecar lives (issue #147). */
+    public SessionEngine engine() {
+        return SessionEngine.ofSidecar(sourceJson());
+    }
+
     public int filesTouchedCount() {
         return filesTouched.size();
     }

@@ -4,6 +4,9 @@ import com.ourgiant.kirocontrolpanel.changelog.ChangeLogService;
 import com.ourgiant.kirocontrolpanel.changelog.ChangeLogWatcherManager;
 import com.ourgiant.kirocontrolpanel.diagnostics.Finding;
 import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanDialog;
+import com.ourgiant.kirocontrolpanel.migration.KiroCliV3MigrationDialog;
+import com.ourgiant.kirocontrolpanel.migration.KiroCliV3MigrationService;
+import com.ourgiant.kirocontrolpanel.migration.KiroCliV3Status;
 import com.ourgiant.kirocontrolpanel.sessions.SessionIndexPaths;
 import com.ourgiant.kirocontrolpanel.sessions.SessionIndexService;
 import com.ourgiant.kirocontrolpanel.sessions.SessionsWatcher;
@@ -118,6 +121,67 @@ public class TrayApp {
         }
 
         checkForUpdateAndNotifyIfNewer();
+        suggestV3MigrationIfRelevant();
+    }
+
+    /**
+     * Suggests moving to kiro-cli V3 (issue #147) when V3 isn't the saved default yet and the
+     * switch would affect something of the user's (V2 agents V3 would skip, or V2-only session
+     * history). Detection shells out to kiro-cli, so it runs off the EDT. Silent if kiro-cli
+     * isn't installed or there's nothing to move. "Remind Me Later" asks again next launch;
+     * "Don't Ask Again" stops it, and Help > Upgrade to Kiro CLI V3... always stays available.
+     */
+    private void suggestV3MigrationIfRelevant() {
+        if (preferences.isV3MigrationPromptDismissed()) {
+            return;
+        }
+        SwingWorker<KiroCliV3Status, Void> worker = new SwingWorker<>() {
+            @Override
+            protected KiroCliV3Status doInBackground() {
+                return KiroCliV3MigrationDialog.detect(new KiroCliV3MigrationService(), preferences);
+            }
+
+            @Override
+            protected void done() {
+                KiroCliV3Status status;
+                try {
+                    status = get();
+                } catch (Exception e) {
+                    logger.warn("kiro-cli V3 migration check failed", e);
+                    return;
+                }
+                if (!status.shouldSuggestMigration()) {
+                    return;
+                }
+                String[] options = {"Show Me How", "Remind Me Later", "Don't Ask Again"};
+                int choice = JOptionPane.showOptionDialog(mainWindow,
+                    "Kiro CLI V3 is the new default engine, and V2 no longer gets feature updates.\n\n"
+                        + v3SuggestionDetail(status)
+                        + "\n\nKiro Control Panel can walk you through the move step by step,\n"
+                        + "backing up first, without losing your settings or sessions.",
+                    "Upgrade to Kiro CLI V3", JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE,
+                    null, options, options[0]);
+                if (choice == 0) {
+                    mainWindow.openV3MigrationGuide();
+                } else if (choice == 2) {
+                    preferences.setV3MigrationPromptDismissed(true);
+                }
+            }
+        };
+        worker.execute();
+    }
+
+    private static String v3SuggestionDetail(KiroCliV3Status status) {
+        List<String> lines = new java.util.ArrayList<>();
+        if (!status.legacyAgentFiles().isEmpty()) {
+            lines.add("\u2022 " + status.legacyAgentFiles().size()
+                + " of your agent configs need converting, or V3 will skip them.");
+        }
+        if (status.v2SessionCount() > 0) {
+            lines.add("\u2022 Your " + status.v2SessionCount()
+                + " existing sessions are kept and can be continued in V3.");
+        }
+        return String.join("\n", lines);
     }
 
     /**
@@ -212,10 +276,16 @@ public class TrayApp {
             launchTerminalItem.addActionListener(e ->
                 KiroSessionLauncher.launchSession(mainWindow, Paths.get(System.getProperty("user.home")),
                     preferences.isSkipPowerShellProfile()));
+            MenuItem v3MigrationItem = new MenuItem("Upgrade to Kiro CLI V3...");
+            v3MigrationItem.addActionListener(e -> {
+                restoreWindow();
+                mainWindow.openV3MigrationGuide();
+            });
             MenuItem exitItem = new MenuItem("Exit");
             exitItem.addActionListener(e -> exitApplication());
             trayMenu.add(showItem);
             trayMenu.add(launchTerminalItem);
+            trayMenu.add(v3MigrationItem);
             trayMenu.addSeparator();
             trayMenu.add(exitItem);
 
@@ -270,7 +340,8 @@ public class TrayApp {
 
     /**
      * On by default (see {@code AppPreferences#isSessionsIndexingEnabled}): an initial
-     * background catch-up scan of {@code ~/.kiro/sessions/cli} -- never on the EDT, since an
+     * background catch-up scan of both kiro-cli session stores ({@code ~/.kiro/sessions/cli} for V2,
+     * {@code ~/.kiro/sessions/<hash>/sess_*} for V3 -- issue #147) -- never on the EDT, since an
      * existing session directory can be large -- plus a dedicated live watcher (own,
      * isolated {@code KiroFolderMonitor} instance, same "complete isolation" precedent as
      * {@link #startChangeLog()}) so sessions written while this app is running show up
@@ -281,10 +352,11 @@ public class TrayApp {
             return;
         }
         Path sessionsCliDir = KiroPaths.globalSessionsCliDir();
+        Path sessionsDir = KiroPaths.globalSessionsDir();
 
         Thread indexingThread = new Thread(() -> {
             try {
-                sessionIndexService.scanAndIndex(sessionsCliDir);
+                sessionIndexService.scanAndIndex(sessionsCliDir, sessionsDir);
             } catch (IOException | SQLException e) {
                 logger.warn("Failed to index kiro-cli session history", e);
             }
@@ -293,7 +365,7 @@ public class TrayApp {
         indexingThread.start();
 
         try {
-            new SessionsWatcher(sessionsCliDir, sessionIndexService).start();
+            new SessionsWatcher(sessionsDir, sessionIndexService).start();
         } catch (IOException e) {
             logger.warn("Failed to start sessions folder watcher", e);
         }

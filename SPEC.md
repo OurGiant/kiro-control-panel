@@ -1325,3 +1325,84 @@ enable/location/rebuild controls — the search/reload regression above was
 found and fixed during this same pass.
 
 345 tests total.
+
+## Kiro CLI V3 migration (issue #147)
+
+Kiro CLI V3 (default from 3.0, bundled behind `--v3`/`--agent-engine v3` in
+late 2.x builds) changes three things this app depends on: where sessions
+are stored, how agent tool permissions are written, and how sessions are
+resumed. The issue asks the app to suggest the move and walk the user
+through it without losing settings or sessions.
+
+**Sources.** Kiro's "Upgrade from CLI 2.x" docs (kiro.dev/docs/cli/v3/ and
+its permissions, hooks-migration, upgrade-agent and migration-guide pages)
+plus real files written by kiro-cli 2.16.2's bundled V3 engine on a dev
+machine. The docs don't give the V3 session store's location or format, so
+those come from the real files.
+
+**V3 session store.** `~/.kiro/sessions/<workspace-hash>/sess_<uuid>/` holds
+`session.json` (`id`, `title`, `workspacePaths[]`, `createdAt`,
+`lastModifiedAt`, `modelId`) and `messages.jsonl`, where each line is
+`{"id","timestamp","payload":{"type":...}}`. Payload types used:
+`user`/`assistant` (text in `content`), `tool_call` (`toolName`, `kind`,
+`args.path`), `usage_summary` (per-turn credits in `promptTurnSummaries`)
+and `session_metadata` with key `contextUsage`. `sub-executions/` and the
+`*.cursor` files are ignored. `"New Session"` is V3's placeholder title and
+is treated as no title. The real session had no file writes, so V3
+files-touched detection uses ACP's `kind: "edit"` plus the write tool names
+found in the kiro-cli binary (`fs_write`, `create`, `Edit`, ...). It hasn't
+been checked against a real V3 write yet.
+
+**Sessions tab changes.** `SessionEngine` (V2/V3) is derived from a
+sidecar's path, so the index schema is unchanged and existing index
+databases keep working. The parser's public methods dispatch on it, so the
+transcript viewer and detail pane needed no changes. `scanAndIndex` and
+`rebuildIndex` take the V3 root as well. A transcript that shrinks (V3's
+`/rewind`) is reindexed from scratch instead of being treated as
+append-only. The watcher is now rooted at `~/.kiro/sessions` (this
+replaces the "rooted at `sessions/cli` exactly" decision in #117) through a
+new `KiroFolderMonitor` constructor flag that turns off its skip of
+directories named `sessions`. A newly created workspace folder is scanned
+straight away, because its files can be written before the watch on it is
+registered. Resuming a V3 session adds `--agent-engine v3`. A V2 session
+id resumes on V2 by itself, per the migration guide. "Continue in V3..."
+resumes a V2 session with `--agent-engine v3`; kiro-cli makes a V3 copy
+and keeps the original. "Clean Up Empty Sessions" only covers V2, because
+`--delete-session` only knows the V2 store and V3 ids aren't bare UUIDs.
+
+**Migration guide (`migration/`).** Every change is made by kiro-cli itself,
+not by this app rewriting Kiro's files, because kiro-cli owns the
+conversion rules and writes its own `.json.bak` backups. Detection runs
+`--version`, `settings chat.agentEngine` (exit 1 when unset) and
+`agent upgrade --help`. That last one exits 2 on builds without the
+command, which is a more reliable signal than comparing version numbers.
+Detection also counts both session stores and finds agent JSON files with
+`allowedTools`/`toolsSettings` but no `permissions` block, which V3 skips.
+The steps are: snapshot `~/.kiro` (reusing `SnapshotService`), update
+kiro-cli (`update --non-interactive`; optional when there are no agents to
+convert), convert agents (`agent upgrade <dir> [--dry-run]` for each
+folder that has one), and set `chat.agentEngine v3`. "Switch Back to V2"
+undoes the last step. Commands run with stdin closed so nothing can hang
+on a prompt, and ANSI color codes are stripped from the log pane. The
+startup suggestion shows only when V3 isn't the saved default and the
+switch affects something of the user's (agents to convert, or V2 sessions
+with no V3 ones yet), and it has a "Don't Ask Again" preference. The Kiro
+Setup Scan flags V2-format agents as STRUCTURAL with no in-app Fix.
+
+**Usage tab.** Not changed. `kiro-cli acp` follows the separate
+`acp.agentEngine` setting, which the guide leaves alone.
+
+**Verification.** The real `~/.kiro/sessions` was indexed read-only into a
+throwaway database: both stores were picked up, the V3 session showed the
+right title, 2 turns, 1.40 credits and 4.5% context, and full-text search
+found it. Detection was run against the real kiro-cli 2.16.2. The full
+wizard flow (preview, convert with `.bak`, switch to V3, switch back,
+back up) was driven against a fake kiro-cli 3.0 with HOME, KIRO_HOME and
+the prefs root all isolated in a temp directory.
+
+**Follow-ups, not done here.** V3's global hooks folder (`~/.kiro/hooks/`;
+the Hooks tab is still workspace-only), V3 Markdown agents
+(`.kiro/agents/*.md`), the `permissions.yaml` files, and marking the
+V2-only `allowedTools`/`keyboardShortcut` fields in the Agents form.
+
+364 tests total.

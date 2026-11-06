@@ -28,6 +28,7 @@ public class AppPreferences {
     private static final String KEY_SNAPSHOT_RETENTION_COUNT = "snapshotRetentionCount";
     private static final String KEY_SESSIONS_INDEXING_ENABLED = "sessionsIndexingEnabled";
     private static final String KEY_SESSIONS_INDEX_LOCATION = "sessionsIndexLocation";
+    private static final String KEY_V3_MIGRATION_PROMPT_DISMISSED = "v3MigrationPromptDismissed";
 
     private static final String WORKSPACE_DELIMITER = "\n";
     private static final String DEFAULT_THEME = "GitHub Dark";
@@ -98,6 +99,16 @@ public class AppPreferences {
 
     public void setFirstRunComplete(boolean complete) {
         prefs.putBoolean(KEY_FIRST_RUN_COMPLETE, complete);
+    }
+
+    /** Set by "Don't ask again" on the startup suggestion to move to kiro-cli V3 (issue #147).
+     * The upgrade guide stays reachable from Help either way. */
+    public boolean isV3MigrationPromptDismissed() {
+        return prefs.getBoolean(KEY_V3_MIGRATION_PROMPT_DISMISSED, false);
+    }
+
+    public void setV3MigrationPromptDismissed(boolean dismissed) {
+        prefs.putBoolean(KEY_V3_MIGRATION_PROMPT_DISMISSED, dismissed);
     }
 
     /**

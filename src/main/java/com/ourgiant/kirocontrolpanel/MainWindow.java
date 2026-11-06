@@ -7,6 +7,7 @@ import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanDialog;
 import com.ourgiant.kirocontrolpanel.diagnostics.KiroSetupScanner;
 import com.ourgiant.kirocontrolpanel.hooks.HooksPanel;
 import com.ourgiant.kirocontrolpanel.mcp.McpPanel;
+import com.ourgiant.kirocontrolpanel.migration.KiroCliV3MigrationDialog;
 import com.ourgiant.kirocontrolpanel.sessions.SessionIndexService;
 import com.ourgiant.kirocontrolpanel.sessions.SessionsPanel;
 import com.ourgiant.kirocontrolpanel.skills.SkillsPanel;
@@ -121,6 +122,10 @@ public class MainWindow extends JFrame {
         scanSetupItem.addActionListener(e -> runSetupScan());
         helpMenu.add(scanSetupItem);
 
+        JMenuItem v3MigrationItem = new JMenuItem("Upgrade to Kiro CLI V3...");
+        v3MigrationItem.addActionListener(e -> openV3MigrationGuide());
+        helpMenu.add(v3MigrationItem);
+
         JMenuItem changeLogItem = new JMenuItem("View Change Log...");
         changeLogItem.addActionListener(e -> new ChangeLogDialog(this).setVisible(true));
         helpMenu.add(changeLogItem);
@@ -132,6 +137,12 @@ public class MainWindow extends JFrame {
         helpMenu.add(aboutItem);
 
         return helpMenu;
+    }
+
+    /** The step-by-step V2 to V3 guide (issue #147). Also opened from the tray menu and the
+     * startup suggestion. */
+    public void openV3MigrationGuide() {
+        new KiroCliV3MigrationDialog(this, preferences).setVisible(true);
     }
 
     private void runSetupScan() {

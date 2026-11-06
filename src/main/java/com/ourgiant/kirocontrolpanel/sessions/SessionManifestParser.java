@@ -73,7 +73,11 @@ public final class SessionManifestParser {
             jsonlFile.toAbsolutePath().normalize().toString());
     }
 
+    /** Parses either engine's sidecar, picking the layout from the path (see {@link SessionEngine}). */
     public static SessionSidecar parseSidecar(Path jsonSidecar) throws IOException {
+        if (SessionEngine.ofSidecar(jsonSidecar) == SessionEngine.V3) {
+            return parseV3Sidecar(jsonSidecar);
+        }
         JsonNode root = MAPPER.readTree(jsonSidecar.toFile());
         String title = root.hasNonNull("title") ? root.get("title").asText() : null;
         return new SessionSidecar(
@@ -96,6 +100,9 @@ public final class SessionManifestParser {
      * than silently added into a total it doesn't belong in.
      */
     public static SessionUsage parseUsage(Path jsonSidecar) throws IOException {
+        if (SessionEngine.ofSidecar(jsonSidecar) == SessionEngine.V3) {
+            return parseV3Usage(jsonSidecar);
+        }
         JsonNode root = MAPPER.readTree(jsonSidecar.toFile());
         JsonNode rts = root.path("session_state").path("rts_model_state");
         Double contextUsagePercentage = rts.hasNonNull("context_usage_percentage")
@@ -144,6 +151,9 @@ public final class SessionManifestParser {
     public static TranscriptStats parseTranscript(Path jsonlFile, long fromLineInclusive) throws IOException {
         if (!Files.isRegularFile(jsonlFile)) {
             return new TranscriptStats(0, List.of(), List.of(), null, 0, List.of());
+        }
+        if (SessionEngine.ofTranscript(jsonlFile) == SessionEngine.V3) {
+            return parseV3Transcript(jsonlFile, fromLineInclusive);
         }
         List<String> lines = Files.readAllLines(jsonlFile);
         long totalLines = lines.size();
@@ -245,5 +255,195 @@ public final class SessionManifestParser {
                 }
             }
         }
+    }
+
+    // -- V3 engine (issue #147) --
+    //
+    // Shapes confirmed against a real session written by kiro-cli 2.16.2's bundled V3 engine:
+    // session.json carries {id, title, workspacePaths[], createdAt, lastModifiedAt, modelId};
+    // each messages.jsonl line is {"id", "timestamp", "payload": {"type": ...}} with payload
+    // types user/assistant (text in "content"), tool_call ({toolName, kind, args}),
+    // tool_result, usage_summary (credits per turn), session_metadata (key "contextUsage"
+    // holds the latest context %), plus turn/session bookkeeping that's ignored here.
+
+    /** V3's placeholder title for a session that hasn't been named yet -- treated as no title,
+     * so the opening prompt is shown instead, same as a V2 session with a null title. */
+    private static final String V3_PLACEHOLDER_TITLE = "New Session";
+
+    /**
+     * Tool names the CLI's own UI treats as file writes, taken from the strings in
+     * kiro-cli-chat 2.16.2. The real V3 session this was built against made no writes, so this
+     * is backed up by ACP's standard {@code kind: "edit"}, which V3 tool calls also carry.
+     */
+    private static final Set<String> V3_WRITE_TOOL_NAMES = Set.of("fs_write", "Write", "create", "Edit", "fs_edit");
+
+    private static SessionSidecar parseV3Sidecar(Path sessionJson) throws IOException {
+        JsonNode root = MAPPER.readTree(sessionJson.toFile());
+        String title = root.hasNonNull("title") ? root.get("title").asText() : null;
+        if (V3_PLACEHOLDER_TITLE.equals(title)) {
+            title = null;
+        }
+        String sessionId = root.path("id").asText("");
+        if (sessionId.isBlank()) {
+            sessionId = SessionEngine.V3.sessionIdFor(sessionJson);
+        }
+        return new SessionSidecar(
+            sessionId,
+            firstWorkspacePath(root),
+            parseInstant(root.path("createdAt").asText(null)),
+            parseInstant(root.path("lastModifiedAt").asText(null)),
+            title,
+            "");
+    }
+
+    private static String firstWorkspacePath(JsonNode sessionRoot) {
+        JsonNode paths = sessionRoot.path("workspacePaths");
+        return paths.isArray() && !paths.isEmpty() ? paths.get(0).asText("") : "";
+    }
+
+    private static TranscriptStats parseV3Transcript(Path messagesJsonl, long fromLineInclusive) throws IOException {
+        List<String> lines = Files.readAllLines(messagesJsonl);
+        long totalLines = lines.size();
+        int fromIndex = (int) Math.min(fromLineInclusive, totalLines);
+        Path workspaceDir = v3WorkspaceDir(messagesJsonl);
+
+        int messageCount = 0;
+        Set<String> filesTouched = new LinkedHashSet<>();
+        List<TranscriptMessage> messages = new ArrayList<>();
+        String firstPromptText = null;
+
+        for (String line : lines.subList(fromIndex, lines.size())) {
+            if (line.isBlank()) {
+                continue;
+            }
+            JsonNode root;
+            try {
+                root = MAPPER.readTree(line);
+            } catch (IOException e) {
+                logger.warn("Skipping unparseable session transcript line in {}", messagesJsonl, e);
+                continue;
+            }
+            JsonNode payload = root.path("payload");
+            String type = payload.path("type").asText("");
+            switch (type) {
+                case "user", "assistant" -> {
+                    messageCount++;
+                    String text = v3Text(payload.path("content"));
+                    if (text != null) {
+                        messages.add(new TranscriptMessage(root.path("id").asText(null), type, text));
+                        if (firstPromptText == null && "user".equals(type)) {
+                            firstPromptText = text;
+                        }
+                    }
+                }
+                case "tool_call" -> {
+                    String toolName = payload.path("toolName").asText("");
+                    boolean isWrite = "edit".equals(payload.path("kind").asText(""))
+                        || V3_WRITE_TOOL_NAMES.contains(toolName);
+                    String path = payload.path("args").path("path").asText(null);
+                    if (isWrite && path != null && !path.isBlank()) {
+                        filesTouched.add(resolveAgainst(workspaceDir, path));
+                    }
+                }
+                default -> logger.debug("V3 transcript payload type '{}' carries nothing indexed, skipping", type);
+            }
+        }
+        return new TranscriptStats(messageCount, List.copyOf(filesTouched), List.of(),
+            firstPromptText, totalLines, List.copyOf(messages));
+    }
+
+    /** V3 tool calls can use workspace-relative paths ("pom.xml"); resolving them against the
+     * session's workspace keeps the Files Touched pane's "Reveal File" working. */
+    private static String resolveAgainst(Path workspaceDir, String path) {
+        try {
+            Path candidate = Path.of(path);
+            if (candidate.isAbsolute() || workspaceDir == null) {
+                return path;
+            }
+            return workspaceDir.resolve(candidate).normalize().toString();
+        } catch (java.nio.file.InvalidPathException e) {
+            return path;
+        }
+    }
+
+    private static Path v3WorkspaceDir(Path messagesJsonl) {
+        Path sessionJson = messagesJsonl.resolveSibling(SessionEngine.V3_SIDECAR_NAME);
+        if (!Files.isRegularFile(sessionJson)) {
+            return null;
+        }
+        try {
+            String dir = firstWorkspacePath(MAPPER.readTree(sessionJson.toFile()));
+            return dir.isBlank() ? null : Path.of(dir);
+        } catch (IOException | java.nio.file.InvalidPathException e) {
+            logger.debug("Couldn't read workspace path from {}", sessionJson, e);
+            return null;
+        }
+    }
+
+    /** User content is a plain string in the captured data; an array of {@code {text}} parts is
+     * accepted too, in case richer messages use one. */
+    private static String v3Text(JsonNode content) {
+        if (content.isTextual()) {
+            String text = content.asText();
+            return text.isBlank() ? null : text;
+        }
+        if (content.isArray()) {
+            StringBuilder joined = new StringBuilder();
+            for (JsonNode part : content) {
+                String text = part.isTextual() ? part.asText() : part.path("text").asText("");
+                if (!text.isBlank()) {
+                    if (joined.length() > 0) {
+                        joined.append('\n');
+                    }
+                    joined.append(text);
+                }
+            }
+            return joined.isEmpty() ? null : joined.toString();
+        }
+        return null;
+    }
+
+    /** Turns and credits come from {@code usage_summary} records (one per completed turn), the
+     * context % from the latest {@code contextUsage} metadata record, and the model from
+     * session.json. V3 doesn't record the context window size, so that stays null. */
+    private static SessionUsage parseV3Usage(Path sessionJson) throws IOException {
+        JsonNode session = MAPPER.readTree(sessionJson.toFile());
+        String modelId = session.hasNonNull("modelId") ? session.get("modelId").asText() : null;
+        Path messagesJsonl = SessionEngine.V3.transcriptFor(sessionJson);
+
+        int turnCount = 0;
+        double totalCredits = 0;
+        Double contextUsagePercentage = null;
+        if (Files.isRegularFile(messagesJsonl)) {
+            for (String line : Files.readAllLines(messagesJsonl)) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                JsonNode payload;
+                try {
+                    payload = MAPPER.readTree(line).path("payload");
+                } catch (IOException e) {
+                    continue;
+                }
+                String type = payload.path("type").asText("");
+                if ("usage_summary".equals(type)) {
+                    turnCount++;
+                    for (JsonNode entry : payload.path("promptTurnSummaries")) {
+                        if ("credit".equals(entry.path("unit").asText(""))) {
+                            totalCredits += entry.path("usage").asDouble(0);
+                        } else {
+                            logger.debug("Skipping V3 usage entry with unrecognized unit '{}' in {}",
+                                entry.path("unit").asText(""), messagesJsonl);
+                        }
+                    }
+                } else if ("session_metadata".equals(type) && "contextUsage".equals(payload.path("key").asText(""))) {
+                    JsonNode pct = payload.path("value").path("usagePercentage");
+                    if (pct.isNumber()) {
+                        contextUsagePercentage = pct.asDouble();
+                    }
+                }
+            }
+        }
+        return new SessionUsage(turnCount, totalCredits, contextUsagePercentage, null, modelId);
     }
 }
