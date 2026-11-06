@@ -61,7 +61,9 @@ that name.
 
 Shows your live plan/credit balance — plan name, credits used vs. cap,
 billing cycle reset date, and overage status — fetched from the local
-`kiro-cli` binary over its own Agent Client Protocol (ACP) interface, with a
+`kiro-cli` binary over its own Agent Client Protocol (ACP) interface (the
+V3 engine's `_kiro/account/getUsage` when available, otherwise V2's `/usage`
+command), with a
 "Refresh" button to pull the latest numbers on demand. This talks only to
 your own already-authenticated local CLI process, never to Kiro's backend
 directly; see [SPEC.md](SPEC.md)'s Non-goals section for the full story on

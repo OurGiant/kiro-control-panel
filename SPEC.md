@@ -87,6 +87,21 @@ the real names from an actual PR's CI run first, then add them.
      back to the original static note (`kiro-cli` → `/usage`) on any
      failure — see `KiroUsageService`.
 
+     **Update (issue #149):** Kiro CLI V3 removes `_kiro.dev/commands/execute`
+     and replaces `/usage` with a dedicated `_kiro/account/getUsage` ACP method.
+     Its handler in the V3 engine bundled with kiro-cli 2.16.2 ignores params,
+     needs no session (so the create-then-delete-a-session step from #124 goes
+     away), and returns `{success, message, data}`, where `data` has the same
+     shape as V2's `/usage` result. `KiroUsageService` now runs
+     `kiro-cli acp --agent-engine v3` + `_kiro/account/getUsage` first and falls
+     back to the V2 path above on any failure (older CLI rejecting the flag,
+     V3 unsupported, unknown method, timeout, `success: false`). An
+     admin-managed plan (`success: true`, no `data`, "Your plan is managed by
+     admin") is shown as-is with no fallback. 2.16.2 doesn't yet list the
+     method in `initialize`'s advertised extension methods, so it's called
+     directly rather than gated on that list. Verified against a fake ACP
+     kiro-cli in all three paths; not yet against a logged-in real account.
+
 ## Kiro file formats (source of truth, from kiro.dev docs)
 
 | Surface  | Global path                | Workspace path                    | Format |
