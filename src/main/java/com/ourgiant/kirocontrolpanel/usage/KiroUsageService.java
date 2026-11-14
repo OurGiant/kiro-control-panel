@@ -30,7 +30,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * {@code kiro-cli} binary over its own Agent Client Protocol (ACP) interface
  * -- the same JSON-RPC-over-stdio surface editor integrations (e.g. Zed) use
  * -- rather than calling Kiro's private backend directly. See SPEC.md's Usage
- * section and issue #94: {@code kiro-cli acp} exposes an undocumented
+ * section and issues #94/#149: kiro-cli's V3 engine has a dedicated
+ * {@code _kiro/account/getUsage} method, tried first; the V2 engine instead exposes an undocumented
  * {@code _kiro.dev/commands/execute} method that can run the same {@code
  * /usage} slash command the interactive REPL supports, returning structured
  * data instead of TUI text.
@@ -91,14 +92,75 @@ public final class KiroUsageService {
         return fetchUsage("kiro-cli");
     }
 
-    /** Package-private seam for tests: lets a nonexistent binary name exercise the "not on PATH" failure path. */
-    static UsageSnapshot fetchUsage(String binary) {
-        Process process;
-        try {
-            process = new ProcessBuilder(binary, "acp").start();
-        } catch (IOException e) {
-            throw new UsageFetchException(binary + " isn't on your PATH", e);
+    /**
+     * Admin-managed plans: V3 answers with no usage data at all (issue #149). A definitive
+     * answer rather than a failure, so it's shown as-is instead of falling back to V2.
+     */
+    public static class AdminManagedPlanException extends UsageFetchException {
+        public AdminManagedPlanException(String message) {
+            super(message);
         }
+    }
+
+    /**
+     * Package-private seam for tests: lets a nonexistent binary name exercise the "not on PATH"
+     * failure path. Tries the V3 engine's dedicated usage method first, then the V2 workaround
+     * (issue #149): V3 removed {@code _kiro.dev/commands/execute}, while older kiro-cli builds and
+     * machines that can't run V3 only have the V2 path.
+     */
+    static UsageSnapshot fetchUsage(String binary) {
+        UsageFetchException v3Failure;
+        try {
+            return fetchUsageV3(binary);
+        } catch (AdminManagedPlanException e) {
+            throw e;
+        } catch (UsageFetchException e) {
+            logger.info("V3 usage lookup failed, falling back to V2: {}", e.getMessage());
+            v3Failure = e;
+        }
+        try {
+            return fetchUsageV2(binary);
+        } catch (UsageFetchException e) {
+            e.addSuppressed(v3Failure);
+            throw e;
+        }
+    }
+
+    /**
+     * V3's {@code _kiro/account/getUsage}, confirmed by reading its handler in the V3 engine
+     * bundled with kiro-cli 2.16.2: it ignores its params and needs no session, so unlike the V2
+     * path nothing is created that has to be cleaned up afterward. It isn't listed in
+     * {@code initialize}'s advertised extension methods in that build, so it's called directly
+     * rather than gated on the list. An older kiro-cli that rejects {@code --agent-engine v3},
+     * or a machine where V3 can't run, makes the process exit, which surfaces here as an
+     * {@link IOException} and so a fallback.
+     */
+    static UsageSnapshot fetchUsageV3(String binary) {
+        Process process = startAcp(binary, "acp", "--agent-engine", "v3");
+        try (AcpClient client = new AcpClient(process)) {
+            initialize(client);
+            return parseV3Result(client.call("_kiro/account/getUsage", Map.of()));
+        } catch (IOException e) {
+            throw new UsageFetchException("Couldn't get usage from kiro-cli V3: " + e.getMessage(), e);
+        }
+    }
+
+    /** Package-private for tests: {@code {success, message, data}} from {@code _kiro/account/getUsage}. */
+    static UsageSnapshot parseV3Result(JsonNode result) {
+        String message = result.path("message").asText("");
+        if (!result.path("success").asBoolean(false)) {
+            throw new UsageFetchException(message.isBlank() ? "kiro-cli V3 couldn't retrieve usage" : message);
+        }
+        JsonNode data = result.path("data");
+        if (data.isMissingNode() || data.isNull()) {
+            throw new AdminManagedPlanException(message.isBlank() ? "Your plan is managed by admin" : message);
+        }
+        return parseSnapshot(data);
+    }
+
+    /** The original V2 workaround (issue #94): {@code /usage} run through {@code _kiro.dev/commands/execute}. */
+    static UsageSnapshot fetchUsageV2(String binary) {
+        Process process = startAcp(binary, "acp");
 
         // ACP's session/new has no "ephemeral" concept -- every call persists a real session to
         // ~/.kiro/sessions/cli/, even though this is purely a vehicle for one usage query and no
@@ -108,10 +170,7 @@ public final class KiroUsageService {
         // Sessions tab (issue #124). Clean it up in `finally` so a fetch failure can't orphan it.
         String sessionId = null;
         try (AcpClient client = new AcpClient(process)) {
-            client.call("initialize", Map.of(
-                "protocolVersion", 1,
-                "clientCapabilities", Map.of(),
-                "clientInfo", Map.of("name", "kiro-control-panel", "version", AppVersion.resolve())));
+            initialize(client);
 
             JsonNode sessionResult = client.call("session/new", Map.of(
                 "cwd", System.getProperty("user.dir"),
@@ -140,6 +199,25 @@ public final class KiroUsageService {
                 KiroCliSessionDeleter.delete(sessionId);
             }
         }
+    }
+
+    private static Process startAcp(String binary, String... args) {
+        List<String> command = new ArrayList<>();
+        command.add(binary);
+        command.addAll(List.of(args));
+        try {
+            // stderr is discarded rather than left as an unread pipe that could fill up.
+            return new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start();
+        } catch (IOException e) {
+            throw new UsageFetchException(binary + " isn't on your PATH", e);
+        }
+    }
+
+    private static void initialize(AcpClient client) throws IOException {
+        client.call("initialize", Map.of(
+            "protocolVersion", 1,
+            "clientCapabilities", Map.of(),
+            "clientInfo", Map.of("name", "kiro-control-panel", "version", AppVersion.resolve())));
     }
 
     /** Package-private for tests. */
